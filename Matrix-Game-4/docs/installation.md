@@ -38,6 +38,49 @@ bash scripts/build_game.sh
 The SDL/OpenGL game and offline recorder are supported separately from CUDA
 inference. The neural model does not have a tested MPS path.
 
+## Windows Standalone Game
+
+The Windows entry is a separate D3D11 renderer built from `src/Main.cpp` and
+`src/Renderer.cpp`. It does not need SDL2, OpenGL or FFmpeg development
+libraries, so it builds with the Visual Studio toolchain alone.
+
+Requirements:
+
+- Visual Studio 2022 with the **Desktop development with C++** workload and a
+  Windows 10/11 SDK.
+- CMake 3.20 or later. The copy shipped with Visual Studio is found
+  automatically.
+- FFmpeg at runtime for `--record`, either as `game/bin/ffmpeg.exe` or on
+  `PATH`. Gameplay and `--benchmark` do not need it.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build_game.ps1
+```
+
+PowerShell 7 (`pwsh -File scripts/build_game.ps1`) works as well when installed.
+
+The executable is written to `game/bin/MedievalCastleBBoxMap.exe`. Point it at
+the downloaded asset pack with `MATRIX_GAME_DATA_DIR`; the variable is read
+before the executable-relative fallback, so the pack stays outside the
+checkout:
+
+```powershell
+$env:MATRIX_GAME_DATA_DIR = "$PWD\resources\game"
+.\game\bin\MedievalCastleBBoxMap.exe --scene ancient-egypt
+```
+
+Without the variable the asset root is the directory above `game/bin`, which is
+what a checkout with `game/assets` populated expects. `--scene castle` selects
+the other map.
+
+The Windows entry is a local gameplay and capture tool, not a model runtime:
+the neural renderer, the browser demo and the GStreamer sidecar remain
+Linux/NVIDIA-only. `--offline-demo` is also Linux-only, so the 48 FPS / 2x
+recorder and the take layout consumed by `matrix-game render --take` are not
+available here. `--record` writes `<take>_P1_bounds.mp4` plus its catalog and
+telemetry sidecars instead; that video is a valid input for
+`matrix-game render --input` on a Linux model host.
+
 ## Browser Media Sidecar
 
 GStreamer runs in a separate Python process so its GI dependencies do not need
