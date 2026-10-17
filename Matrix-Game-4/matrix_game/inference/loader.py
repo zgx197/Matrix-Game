@@ -137,7 +137,11 @@ class ModelComponents:
                             sink_latent=self.sink_latent, sink_mode=self.args.sink_mode,
                             sink_rope_mode=self.args.sink_rope_mode,
                             size=getattr(self.args, "size", (480, 864)),
-                            window=getattr(self.args, "window", 21), **kwargs)
+                            window=getattr(self.args, "window", 21),
+                            clean_every=getattr(self.args, "clean_every", 1),
+                            clean_adaptive=getattr(self.args, "clean_adaptive", False),
+                            clean_threshold=getattr(self.args, "clean_threshold", 0.0),
+                            clean_max_gap=getattr(self.args, "clean_max_gap", 8), **kwargs)
 
     def config(self):
         return dict(scene=self.args.scene, scene_name=SCENES[self.args.scene]["name"],

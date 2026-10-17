@@ -104,7 +104,10 @@ def run_config(torch, components, args, size, steps, runtime, guard, out_dir, fr
     from matrix_game.inference.stream import CastleStream, encode_sink_image
 
     height, width = size
-    label = f"{height}x{width}_{len(steps)}step_{runtime}" + (f"_w{window}" if window != 21 else "")
+    label = (f"{height}x{width}_{len(steps)}step_{runtime}"
+             + (f"_w{window}" if window != 21 else "")
+             + (f"_c{args.clean_every}" if args.clean_every != 1 else "")
+             + (f"_a{args.clean_threshold}" if args.clean_adaptive else ""))
     guard.check("before " + label)
 
     sink = components.sink_latent if tuple(size) == (480, 864) else None
@@ -120,12 +123,19 @@ def run_config(torch, components, args, size, steps, runtime, guard, out_dir, fr
                           seed=0, vae_backend=args.vae_backend, steps=steps,
                           first_steps=steps, profile=True, sink_latent=sink,
                           sink_mode=args.sink_mode, sink_rope_mode=args.sink_rope_mode,
-                          size=size, window=window)
+                          size=size, window=window,
+                          clean_every=args.clean_every, clean_adaptive=args.clean_adaptive,
+                          clean_threshold=args.clean_threshold, clean_max_gap=args.clean_max_gap,
+                          track_motion=True)
     torch.cuda.reset_peak_memory_stats()
     timings = {"encode": [], "denoise": [], "decode": []}
     written = index = 0
     sample = None
     wall = 0.0
+    # Temporal fidelity: how much the output frame-to-frame change tracks the proxy's.
+    # A drifting KV (skipped clean passes) shows up as output moving more than the proxy.
+    out_diffs, proxy_diffs = [], []
+    prev_out = prev_proxy = None
     try:
         while written < min(frames, len(clip)):
             count = 1 if written == 0 else 4
@@ -139,6 +149,18 @@ def run_config(torch, components, args, size, steps, runtime, guard, out_dir, fr
             result = stream.push(frames_to_tensor(images), frame_start=written)
             wall += time.perf_counter() - started
             written += count
+            if args.track_quality and result.pixels is not None:
+                import numpy as np
+                rgb = tensor_to_uint8(result.pixels)
+                for frame in rgb:
+                    if prev_out is not None:
+                        out_diffs.append(float(np.abs(frame.astype(np.int16) - prev_out).mean()))
+                    prev_out = frame.astype(np.int16)
+                for image in images:
+                    proxy = np.asarray(image, dtype=np.int16)
+                    if prev_proxy is not None:
+                        proxy_diffs.append(float(np.abs(proxy - prev_proxy).mean()))
+                    prev_proxy = proxy
             for name, value in result.timings_ms.items():
                 timings.setdefault(name, []).append(value)
             if sample is None and written >= 9:
@@ -151,6 +173,11 @@ def run_config(torch, components, args, size, steps, runtime, guard, out_dir, fr
             if degenerate:
                 print(f"    WARNING: {label} sample looks like noise - do not trust this row", flush=True)
     finally:
+        try:
+            motion = stream.motion_values()
+            cleans = list(getattr(stream, "clean_history", []))
+        except Exception:  # noqa: BLE001 - a failed load must not mask the real error
+            motion, cleans = [], []
         stream.close()
         del stream
         install_runtime(components.gen, "native")
@@ -166,8 +193,19 @@ def run_config(torch, components, args, size, steps, runtime, guard, out_dir, fr
 
     stages = {name: summary(values) for name, values in timings.items() if values}
     chunk_ms = sum(stage.get("mean", 0) for stage in stages.values())
+    chunks = max(1, written // 4)
+    quality = None
+    if out_diffs and proxy_diffs:
+        out_mean, proxy_mean = sum(out_diffs) / len(out_diffs), sum(proxy_diffs) / len(proxy_diffs)
+        quality = dict(output_motion=round(out_mean, 2), proxy_motion=round(proxy_mean, 2),
+                       # >1 means the render invents motion the proxy does not have.
+                       flicker=round(out_mean / proxy_mean, 3) if proxy_mean else None)
     return dict(label=label, size=list(size), steps=list(steps), runtime=runtime,
                 window=window, frames=written,
+                clean_every=args.clean_every, clean_adaptive=args.clean_adaptive,
+                clean_threshold=args.clean_threshold, clean_max_gap=args.clean_max_gap,
+                clean_passes=len(cleans), clean_rate=round(len(cleans) / chunks, 3),
+                motion=summary(motion), quality=quality,
                 seconds=round(wall, 2), fps=round(written / wall, 2) if wall else 0,
                 chunk_ms=round(chunk_ms, 2), stages=stages,
                 peak_vram_gb=round(torch.cuda.max_memory_allocated() / 1024 ** 3, 2),
@@ -188,6 +226,10 @@ def main():
                         help="full1/native, kern1/kernels, graph1/ring-graph, half1=288x512, full2=two steps")
     parser.add_argument("--windows", default="21",
                         help="Comma-separated KV attention windows in latent frames (default 21, the released setting)")
+    # --clean-every / --clean-adaptive / --clean-threshold / --clean-max-gap come from
+    # add_model_arguments, so they are not repeated here.
+    parser.add_argument("--track-quality", action="store_true",
+                        help="Measure output-vs-proxy frame-to-frame motion (adds a little CPU work)")
     args = parser.parse_args()
     resolve_model_arguments(args)
 

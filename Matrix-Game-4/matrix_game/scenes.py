@@ -50,6 +50,15 @@ def add_model_arguments(parser):
     parser.add_argument("--window", type=parse_window, default=21,
                         help="KV attention window in latent frames (default 21, the released setting). "
                              "Shorter is faster and shortens long-range memory; 12 measures 14%% faster at 480p.")
+    parser.add_argument("--clean-every", type=int, default=1,
+                        help="Refresh the clean KV every N chunks (default 1 = every chunk). "
+                             "Skipping it trades long-run fidelity for a full forward per skipped chunk.")
+    parser.add_argument("--clean-adaptive", action="store_true",
+                        help="Skip the clean pass when the picture barely changed (motion-gated)")
+    parser.add_argument("--clean-threshold", type=float, default=0.0,
+                        help="Motion below this skips the clean pass (control-latent mean abs delta)")
+    parser.add_argument("--clean-max-gap", type=int, default=8,
+                        help="Never let the KV go longer than this many chunks without a clean pass")
     parser.add_argument("--vae-graph", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--prompt-mode", choices=("fixed", "dynamic"), default="fixed")
     parser.add_argument("--prompt", help="Override the fixed scene caption")

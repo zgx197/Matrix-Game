@@ -1,6 +1,8 @@
 """Scene-configured chunk1 sessions with Wan or TAEHV streaming codecs."""
 from dataclasses import dataclass
 
+import os
+
 import torch
 
 
@@ -58,7 +60,8 @@ class CastleStream:
     def __init__(self, generator, vae, prompt_embeds, *, seed=0, max_latents=8192,
                  vae_backend="wan", steps=(1000, 500), first_steps=(1000, 750, 500, 250), profile=False,
                  sink_latent=None, sink_mode="kv_only", sink_rope_mode="fixed", size=(480, 864),
-                 window=21):
+                 window=21, clean_every=1, clean_adaptive=False,
+                 clean_threshold=0.0, clean_max_gap=8, track_motion=False):
         from matrix_game.inference.rollout import CausalV2VRollout, set_attention_window, warp_steps
         from matrix_game.inference.wrappers import frame_seq_length_of
 
@@ -97,6 +100,21 @@ class CastleStream:
         # agree - so it is threaded through here instead of being hard-coded.
         if window < 2:
             raise ValueError("Attention window must cover at least two latent frames")
+        # The clean pass is what makes the next chunk attend to a *clean* KV. It costs a
+        # full forward, so it can be refreshed less often; the drift it leaves behind grows
+        # with how fast the picture changes, which the control latent difference measures.
+        if clean_every < 1:
+            raise ValueError("clean_every must be at least 1")
+        if clean_max_gap < 1:
+            raise ValueError("clean_max_gap must be at least 1")
+        self.clean_every, self.clean_adaptive = clean_every, clean_adaptive
+        self.clean_threshold, self.clean_max_gap = clean_threshold, clean_max_gap
+        self.last_clean = -1
+        self._prev_control = None
+        self.track_motion = track_motion or clean_adaptive or clean_every > 1
+        self._motion_tensors = []
+        self.motion_history = []
+        self.clean_history = []
         self.initial_rng = torch.Generator("cpu").manual_seed(seed + 1)
         self.racing_rng = torch.Generator("cpu").manual_seed(seed)
         self.renoise_rng = torch.Generator(self.device).manual_seed(seed)
@@ -212,12 +230,46 @@ class CastleStream:
             if not torch.isfinite(pred).all():
                 raise RuntimeError("Non-finite generated latent")
             mark()
+            # How much this chunk moved relative to the last one. The control latent is
+            # the engine's own view of the frame, so this is cheap and needs no decode.
+            motion = None
+            if self.track_motion:
+                with torch.no_grad():
+                    if self._prev_control is not None:
+                        # Kept as a tensor: reading it back would sync the stream in the
+                        # middle of the chunk. motion_values() drains them at the end.
+                        self._motion_tensors.append((control - self._prev_control).abs().mean().detach())
+                    self._prev_control = control.detach()
+            if self.clean_adaptive and self._motion_tensors:
+                # A data-dependent decision needs the number on the host; this is the only
+                # place the stream is allowed to sync mid-chunk.
+                motion = float(self._motion_tensors[-1])
+
+            def want_clean():
+                # Always clean the first chunk, and never let the KV drift further than
+                # max_gap. Beyond that: adaptive mode gates on motion, fixed mode on the
+                # refresh interval.
+                if self.index == 0:
+                    decision = True
+                elif self.index - self.last_clean >= self.clean_max_gap:
+                    decision = True
+                elif self.clean_adaptive:
+                    decision = motion is None or motion >= self.clean_threshold
+                else:
+                    decision = self.index % self.clean_every == 0
+                if os.environ.get("MATRIX_CLEAN_DEBUG"):
+                    print(f"[clean] idx={self.index} motion={motion} gap={self.index - self.last_clean} "
+                          f"want={decision}", flush=True)
+                return decision
+
             def clean():
                 self.gen(noisy_image_or_video=pred, conditional_dict=cond,
                          timestep=torch.zeros(1, 1, device=self.device), drop_control=True, **common)
+                self.last_clean = self.index
+                self.clean_history.append(self.index)
 
             if on_rgb is None:
-                clean()
+                want_clean() and clean()
                 mark()
             if self.vae_backend == "wan":
                 decoded = self.decoder.push(pred)
@@ -242,14 +294,14 @@ class CastleStream:
                     finally:
                         # The native wrapper has host syncs. Publish before
                         # entering it, rather than merely before its final wait.
-                        clean()
+                        want_clean() and clean()
                         mark()
                         torch.cuda.current_stream(self.device).synchronize()
                 else:
                     rgb = packed.cpu()
                     on_rgb(rgb)
                     mark()
-                    clean()
+                    want_clean() and clean()
                     mark()
                 decoded = None
             else:
@@ -267,6 +319,13 @@ class CastleStream:
         except BaseException:
             self.failed = True
             raise
+
+    def motion_values(self):
+        """Per-chunk control-latent drift, drained once at the end of a run."""
+        if self._motion_tensors:
+            self.motion_history = [float(v) for v in self._motion_tensors]
+            self._motion_tensors = []
+        return self.motion_history
 
     def close(self):
         if self.closed:
