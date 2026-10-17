@@ -51,7 +51,14 @@ def _to_dtype(dtype):
 
 
 def _rank0():
+    """True when this process should log.
+
+    torch.distributed may be a stub build without is_initialized (the Windows
+    ROCm wheels are), so probe for the attribute rather than assuming it.
+    """
     import torch.distributed as dist
+    if not hasattr(dist, "is_initialized"):
+        return True
     return (not dist.is_initialized()) or dist.get_rank() == 0
 
 

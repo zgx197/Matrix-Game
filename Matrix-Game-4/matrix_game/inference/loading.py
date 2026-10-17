@@ -5,6 +5,19 @@ import torch
 _STRIP_INNER = ("_fsdp_wrapped_module.", "_checkpoint_wrapped_module.", "_orig_mod.")
 
 
+def _rank0():
+    """True when this process should log.
+
+    ``torch.distributed`` can be a stub without ``is_initialized`` - the Windows
+    ROCm wheels are built that way - so probe for the attribute instead of
+    assuming a full distributed build.
+    """
+    import torch.distributed as dist
+    if not hasattr(dist, "is_initialized"):
+        return True
+    return (not dist.is_initialized()) or dist.get_rank() == 0
+
+
 def clean_state_dict_keys(sd):
     if not isinstance(sd, dict) or not sd:
         raise ValueError("Checkpoint must contain a nonempty tensor dictionary")
@@ -60,7 +73,7 @@ def build_dit(model_dir: str, ckpt: Optional[str], is_causal: bool, dtype="float
                            f"unexpected {len(unexpected)} {list(unexpected)[:5]}")
     w.model = torch.nn.Module.to(w.model, dtype=_to_dtype(dtype))
     w.model.eval()
-    if verbose and (not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0):
+    if verbose and _rank0():
         print(f"[build_dit] {'causal' if is_causal else 'bidir'} <- {ckpt}[{used}]，{len(sd)} 个张量，dtype {dtype}", flush=True)
     return w
 
