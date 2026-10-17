@@ -2,6 +2,7 @@
 #include "Recording.h"
 #include <shellapi.h>
 #include <windowsx.h>
+#include <cstdlib>
 #include <iomanip>
 #include <sstream>
 
@@ -352,7 +353,13 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,LPWSTR,int) {
         wchar_t executable[32768];
         const auto chars=GetModuleFileName(nullptr,executable,DWORD(std::size(executable)));
         if(!chars||chars>=std::size(executable)) throw std::runtime_error("Cannot locate executable");
-        root=std::filesystem::path(executable).parent_path().parent_path();
+        // Same precedence as MainLinux.cpp's appRoot(): an explicit data directory
+        // wins, so a downloaded asset pack can stay outside the checkout and the
+        // executable's own location never has to encode where the assets live.
+        if(const wchar_t* data=_wgetenv(L"MATRIX_GAME_DATA_DIR");data&&*data)
+            root=std::filesystem::absolute(std::filesystem::path(data));
+        else
+            root=std::filesystem::path(executable).parent_path().parent_path();
         auto opt=readOptions();
         automated=opt.validate||opt.visualTest||opt.combatTest||opt.poseTest||opt.uePoseTest||opt.coverTest||opt.trailTest||opt.firingTest||opt.enemyFiringTest||opt.eventTest||opt.record||!opt.capture.empty()||!opt.benchmark.empty();
         const auto scene=SceneConfig::load(root,opt.scene);
