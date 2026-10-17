@@ -55,7 +55,7 @@ struct Options {
     bool validate=false,visualTest=false,vsync=false,fullscreen=false;
     std::wstring view=L"all";std::string scene="castle";
     std::filesystem::path capture,benchmark;
-    bool mapOnly=false,combatTest=false,poseTest=false,uePoseTest=false,coverTest=false,trailTest=false,firingTest=false,enemyFiringTest=false,eventTest=false,record=false,noHud=false;
+    bool mapOnly=false,combatTest=false,poseTest=false,uePoseTest=false,coverTest=false,trailTest=false,firingTest=false,enemyFiringTest=false,eventTest=false,record=false,noHud=false,manual=false;
     float coverProbability=.5f;
     uint32_t seed=1729;
     float duration=10;
@@ -244,6 +244,7 @@ Options readOptions() {
             else if(arg==L"--cover-probability") o.coverProbability=std::stof(next());
             else if(arg==L"--record") o.record=true;
         else if(arg==L"--no-hud") o.noHud=true;
+        else if(arg==L"--manual") o.manual=true;
             else if(arg==L"--recording-dir") o.recordingDirectory=next();
             else if(arg==L"--duration") o.duration=std::stof(next());
             else if(arg==L"--seed") o.seed=uint32_t(std::stoul(next()));
@@ -362,6 +363,9 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,LPWSTR,int) {
         else
             root=std::filesystem::path(executable).parent_path().parent_path();
         auto opt=readOptions();
+        // Manual control from the first frame, so a capture/rendering bridge can
+        // hand the window to a player without asking for F7.
+        state.manual=opt.manual;
         automated=opt.validate||opt.visualTest||opt.combatTest||opt.poseTest||opt.uePoseTest||opt.coverTest||opt.trailTest||opt.firingTest||opt.enemyFiringTest||opt.eventTest||opt.record||!opt.capture.empty()||!opt.benchmark.empty();
         const auto scene=SceneConfig::load(root,opt.scene);
         MapData map(scene);
@@ -419,6 +423,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,LPWSTR,int) {
                 std::unique_ptr<Encounter> encounter;
                 if(!opt.mapOnly)encounter=std::make_unique<Encounter>(root,map,renderer,opt.seed);
                 if(encounter)encounter->setCoverProbability(opt.coverProbability);
+                if(encounter&&opt.manual)encounter->setAutopilot(false);
                 if(opt.combatTest){auto report=encounter->selfTest();std::ofstream(root/L"captures/combat-tests.json")<<report.dump(2);}
                 std::unique_ptr<Recording> recording;
                 std::filesystem::path recordingDir=opt.recordingDirectory.empty()?scene.outputDirectory(root,"recordings"):std::filesystem::absolute(opt.recordingDirectory);
