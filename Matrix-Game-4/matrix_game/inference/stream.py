@@ -102,7 +102,7 @@ class CastleStream:
         )
         set_attention_window(generator, 21, 1)
         self.rollout._prepare_rope()
-        self.fsl = frame_seq_length_of(generator, 30, 54)
+        self.fsl = frame_seq_length_of(generator, *self.latent_size)
         self.kv, self.xc = self.rollout._caches(1, 21, self.fsl, self.dtype, self.device)
         for cache in self.kv:
             cache["k_sink_raw"] = torch.zeros_like(cache["k"][:, :self.fsl])

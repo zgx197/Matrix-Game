@@ -80,13 +80,14 @@ def bench_attention(torch, height_width, window=21, dtype=None):
     return dict(tokens=tokens, keys=keys, attention_ms=round(milliseconds, 3))
 
 
-def run_config(torch, components, args, size, steps, guard, out_dir, frames, clip):
+def run_config(torch, components, args, size, steps, runtime, guard, out_dir, frames, clip):
     from PIL import Image
     from matrix_game.inference.preprocessing import crop_and_resize, frames_to_tensor, tensor_to_uint8
+    from matrix_game.inference.runtime import install_runtime
     from matrix_game.inference.stream import CastleStream, encode_sink_image
 
     height, width = size
-    label = f"{height}x{width}_{len(steps)}step"
+    label = f"{height}x{width}_{len(steps)}step_{runtime}"
     guard.check("before " + label)
 
     sink = components.sink_latent if tuple(size) == (480, 864) else None
@@ -97,6 +98,7 @@ def run_config(torch, components, args, size, steps, guard, out_dir, frames, cli
         except Exception as exc:  # noqa: BLE001 - a missing sink only costs identity anchoring
             print(f"    sink encode failed for {size}: {exc}", flush=True)
             sink = None
+    install_runtime(components.gen, runtime)
     stream = CastleStream(components.gen, components.vae, components.prompt,
                           seed=0, vae_backend=args.vae_backend, steps=steps,
                           first_steps=steps, profile=True, sink_latent=sink,
@@ -131,6 +133,7 @@ def run_config(torch, components, args, size, steps, guard, out_dir, frames, cli
     finally:
         stream.close()
         del stream
+        install_runtime(components.gen, "native")
         torch.cuda.empty_cache()
 
     def summary(values):
@@ -143,7 +146,7 @@ def run_config(torch, components, args, size, steps, guard, out_dir, frames, cli
 
     stages = {name: summary(values) for name, values in timings.items() if values}
     chunk_ms = sum(stage.get("mean", 0) for stage in stages.values())
-    return dict(label=label, size=list(size), steps=list(steps), frames=written,
+    return dict(label=label, size=list(size), steps=list(steps), runtime=runtime, frames=written,
                 seconds=round(wall, 2), fps=round(written / wall, 2) if wall else 0,
                 chunk_ms=round(chunk_ms, 2), stages=stages,
                 peak_vram_gb=round(torch.cuda.max_memory_allocated() / 1024 ** 3, 2),
@@ -160,17 +163,26 @@ def main():
     parser.add_argument("--out", type=Path, default=Path("captures/harness"))
     parser.add_argument("--frames", type=int, default=48)
     parser.add_argument("--max-commit-gb", type=float, default=40.0)
-    parser.add_argument("--configs", default="full1,half1,mid1,half2,full2",
-                        help="full1/full2=480x864 one/two steps, mid1=360x640, half1/half2=288x512")
+    parser.add_argument("--configs", default="full1,kern1,graph1",
+                        help="full1/native, kern1/kernels, graph1/ring-graph, half1=288x512, full2=two steps")
     args = parser.parse_args()
     resolve_model_arguments(args)
 
+    # name -> (size, steps, dit runtime). The runtime is installed per configuration;
+    # "kernels" and "ring-graph" replace CausalWanModel.forward with host-planned KV.
     matrix = {
-        "full1": ((480, 864), (1000,)),
-        "full2": ((480, 864), (1000, 500)),
-        "mid1": ((352, 640), (1000,)),
-        "half1": ((288, 512), (1000,)),
-        "half2": ((288, 512), (1000, 500)),
+        "full1": ((480, 864), (1000,), "native"),
+        "kern1": ((480, 864), (1000,), "kernels"),
+        "graph1": ((480, 864), (1000,), "ring-graph"),
+        "cg1": ((480, 864), (1000,), "cudagraph"),
+        "ring1": ((480, 864), (1000,), "ring"),
+        "full2": ((480, 864), (1000, 500), "native"),
+        "mid1": ((352, 640), (1000,), "native"),
+        "half1": ((288, 512), (1000,), "native"),
+        "khalf1": ((288, 512), (1000,), "kernels"),
+        "khalf2": ((288, 512), (1000, 500), "kernels"),
+        "kmid1": ((352, 640), (1000,), "kernels"),
+        "half2": ((288, 512), (1000, 500), "native"),
     }
     chosen = [name.strip() for name in args.configs.split(",") if name.strip()]
     unknown = [name for name in chosen if name not in matrix]
@@ -209,9 +221,18 @@ def main():
     results = []
     try:
         for name in chosen:
-            size, steps = matrix[name]
-            print(f"\n--- {name}: {size[0]}x{size[1]}, {len(steps)} step(s) ---", flush=True)
-            entry = run_config(torch, components, args, size, steps, guard, args.out, args.frames, clip)
+            size, steps, runtime = matrix[name]
+            print(f"\n--- {name}: {size[0]}x{size[1]}, {len(steps)} step(s), {runtime} ---", flush=True)
+            try:
+                entry = run_config(torch, components, args, size, steps, runtime, guard,
+                                   args.out, args.frames, clip)
+            except SystemExit:
+                raise
+            except Exception as exc:  # noqa: BLE001 - one bad runtime must not end the matrix
+                entry = dict(label=name, size=list(size), steps=list(steps), runtime=runtime,
+                             error=f"{type(exc).__name__}: {exc}")
+                print(f"    FAILED: {entry['error']}", flush=True)
+                torch.cuda.empty_cache()
             entry["name"] = name
             results.append(entry)
             print(json.dumps(entry), flush=True)
@@ -224,13 +245,18 @@ def main():
         (args.out / "harness.json").write_text(json.dumps(report, indent=2) + "\n")
 
     print("\n=== summary ===", flush=True)
-    print(f"{'config':8} {'size':>10} {'steps':>5} {'fps':>6} {'chunk ms':>9} "
-          f"{'denoise':>8} {'encode':>7} {'decode':>7} {'vram GB':>8}", flush=True)
+    print(f"{'config':8} {'size':>10} {'steps':>5} {'runtime':>11} {'fps':>6} {'chunk ms':>9} "
+          f"{'denoise':>8} {'clean_kv':>8} {'encode':>7} {'decode':>7} {'vram GB':>8}", flush=True)
     for entry in results:
+        head = (f"{entry['name']:8} {entry['size'][0]:4}x{entry['size'][1]:<5} "
+                f"{len(entry['steps']):5} {entry.get('runtime', '?'):>11} ")
+        if "error" in entry:
+            print(head + f"FAILED: {entry['error']}", flush=True)
+            continue
         stages = entry["stages"]
-        print(f"{entry['name']:8} {entry['size'][0]:4}x{entry['size'][1]:<5} {len(entry['steps']):5} "
-              f"{entry['fps']:6.2f} {entry['chunk_ms']:9.1f} "
+        print(head + f"{entry['fps']:6.2f} {entry['chunk_ms']:9.1f} "
               f"{stages.get('denoise', {}).get('mean', 0):8.1f} "
+              f"{stages.get('clean_kv', {}).get('mean', 0):8.1f} "
               f"{stages.get('encode', {}).get('mean', 0):7.1f} "
               f"{stages.get('decode', {}).get('mean', 0):7.1f} "
               f"{entry['peak_vram_gb']:8.2f}", flush=True)
