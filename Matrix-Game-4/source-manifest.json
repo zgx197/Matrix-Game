@@ -5,31 +5,6 @@
     "sha256": "ee9c13ca605baa69c238e6419d7a7bb3d588113f795cfce3173cc3f6c567c2f2"
   },
   {
-    "path": "LICENSE",
-    "size": 11357,
-    "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
-  },
-  {
-    "path": "NOTICE",
-    "size": 378,
-    "sha256": "c501ad403bcf41cf0c3c9286c3f7c787d7e9714d754ed1dc49141333154f543c"
-  },
-  {
-    "path": "README.md",
-    "size": 7207,
-    "sha256": "daaabefab41402affb5390b804f6b19c0ce5c513549575fbf92c856b1370500b"
-  },
-  {
-    "path": "SECURITY.md",
-    "size": 1523,
-    "sha256": "b7336ea5f7815b33916a5bc51883962ae4d68f1af6a6a496f10475cc11b4fd60"
-  },
-  {
-    "path": "THIRD_PARTY_NOTICES.md",
-    "size": 2614,
-    "sha256": "d25466469581d8ab4342203796d88d2bfcfbddc284dec7a8bfc6ca56afe1a8e1"
-  },
-  {
     "path": "configs/mediamtx.yml",
     "size": 719,
     "sha256": "7f02b563a5c8eea8e905cb2b788c3a852d986e6ec6feb7d20a097c1ffa0e0c7b"
@@ -41,8 +16,8 @@
   },
   {
     "path": "docs/installation.md",
-    "size": 3139,
-    "sha256": "0294840b0315e467fd4d4a20cc1ef2dce9a0b7f670331f236828c1f84a94806c"
+    "size": 4904,
+    "sha256": "e713024922c36f52cec4b47c6c940c7e92bab339d09fc1f25fd23d0b88a80a55"
   },
   {
     "path": "docs/offline.md",
@@ -66,13 +41,8 @@
   },
   {
     "path": "game/CMakeLists.txt",
-    "size": 6118,
-    "sha256": "80708770e4927d15ba73be65254ed9470a31cfdf1dbf0d4a37a96a307086635a"
-  },
-  {
-    "path": "game/README.md",
-    "size": 4690,
-    "sha256": "f7fe07f6eff9aef7213dc4d68c7d60c9d047301eaf7aae24525fe5c5d69df778"
+    "size": 6661,
+    "sha256": "ce8335164d7d2f2405d75810d2378ea47071c2c0a6872e8384d7b8f25b15d8e3"
   },
   {
     "path": "game/racing/CMakeLists.txt",
@@ -115,14 +85,14 @@
     "sha256": "949703c21a87a2d1447bd6f9a9039328488dcad793df339cce3613b97e4f1dd2"
   },
   {
-    "path": "game/racing/src/GameRuntime.h",
-    "size": 12408,
-    "sha256": "905f4f0a05c50c69fe645ce76b6d117181af64f26e437aa54544fdf44a6c0776"
-  },
-  {
     "path": "game/racing/src/Gamepad.h",
     "size": 1314,
     "sha256": "b3ea680b3f3e08e57b1e11b8c90c107743b4d289fa13ea9c97070b94ceeb1674"
+  },
+  {
+    "path": "game/racing/src/GameRuntime.h",
+    "size": 12408,
+    "sha256": "905f4f0a05c50c69fe645ce76b6d117181af64f26e437aa54544fdf44a6c0776"
   },
   {
     "path": "game/racing/src/HandlingMenu.h",
@@ -445,6 +415,11 @@
     "sha256": "bed57b399ac7b7bec987189d5827d11393525c0b59127d9a41c00da0d2fcc91c"
   },
   {
+    "path": "game/README.md",
+    "size": 4690,
+    "sha256": "f7fe07f6eff9aef7213dc4d68c7d60c9d047301eaf7aae24525fe5c5d69df778"
+  },
+  {
     "path": "game/src/BitmapFont.h",
     "size": 1196,
     "sha256": "31a22ec266b9197078c3e2fcfd5ae6b79d81b431f054a873a5e9e8b6cbbc7316"
@@ -521,8 +496,8 @@
   },
   {
     "path": "game/src/Main.cpp",
-    "size": 33942,
-    "sha256": "6bf4177bd34888b1f735e29e7ad2d4ac40fe21bbd6174e5eeaa98ce4eca84336"
+    "size": 34375,
+    "sha256": "53010614016c90b413d03060d3ca4cf2d68733f6c988636cd38bfd7cb91d533f"
   },
   {
     "path": "game/src/MainLinux.cpp",
@@ -700,16 +675,6 @@
     "sha256": "1f48607a5c2188eb7f706e89971c5dc233ad168e67c7b0950458ddb8c1b94d40"
   },
   {
-    "path": "game/third_party/JoltPhysics/Build/CMakeLists.txt",
-    "size": 21917,
-    "sha256": "6550aea5caef57ba9fd7a0bb4373076053e67b57500a5e9ab8b9c3ec494b2483"
-  },
-  {
-    "path": "game/third_party/JoltPhysics/Build/README.md",
-    "size": 12648,
-    "sha256": "fca3020c0b6a662d60bcc1f7d507b3421da47021200ae92854afc74a95b21a69"
-  },
-  {
     "path": "game/third_party/JoltPhysics/Build/cmake_linux_clang_gcc.sh",
     "size": 761,
     "sha256": "62e3d98778624ea1b1fe900130240f19b735c722aa8f4fcdd568b9ece70b04f6"
@@ -820,6 +785,11 @@
     "sha256": "d2956abb6fd084e41a18eb544642029cf77cb9b04ba622533ca348ef8089992b"
   },
   {
+    "path": "game/third_party/JoltPhysics/Build/CMakeLists.txt",
+    "size": 21917,
+    "sha256": "6550aea5caef57ba9fd7a0bb4373076053e67b57500a5e9ab8b9c3ec494b2483"
+  },
+  {
     "path": "game/third_party/JoltPhysics/Build/iOS/JoltViewerInfo.plist",
     "size": 1036,
     "sha256": "e8185eae581dff2453f0f9ded1dd76fa877d0b6834c107f48dc3fb97870671dc"
@@ -848,6 +818,11 @@
     "path": "game/third_party/JoltPhysics/Build/mingw-w64-x86_64.cmake",
     "size": 872,
     "sha256": "a20ae5b1b8f286877844a6e533d81368d6759dc1037847ef7d9baf9b3d6174d2"
+  },
+  {
+    "path": "game/third_party/JoltPhysics/Build/README.md",
+    "size": 12648,
+    "sha256": "fca3020c0b6a662d60bcc1f7d507b3421da47021200ae92854afc74a95b21a69"
   },
   {
     "path": "game/third_party/JoltPhysics/Build/ubuntu24_install_vulkan_sdk.sh",
@@ -925,21 +900,6 @@
     "sha256": "5f54e10d10c8f2f395ca1f7074f32bd5ae895b9aaf398da1014e96d5320af065"
   },
   {
-    "path": "game/third_party/JoltPhysics/Jolt/Core/FPControlWord.h",
-    "size": 3214,
-    "sha256": "a81822802d92b30b2946ba87a9baa0396a166281fa3d842b60302010d76b7b03"
-  },
-  {
-    "path": "game/third_party/JoltPhysics/Jolt/Core/FPException.h",
-    "size": 3425,
-    "sha256": "92d7f5d0f74b6acd9a770d31e2abf45444aa5ad926e8311bf5106fdab64ac5ad"
-  },
-  {
-    "path": "game/third_party/JoltPhysics/Jolt/Core/FPFlushDenormals.h",
-    "size": 1442,
-    "sha256": "ff8d916c96da56c8721dc27fc206f856aed16d4ffc38c507f6b8486db31e6931"
-  },
-  {
     "path": "game/third_party/JoltPhysics/Jolt/Core/Factory.cpp",
     "size": 2291,
     "sha256": "7bd6a207578f152c81e15761814abc0f85114afb3619dac46d4eacbfe09cf02e"
@@ -958,6 +918,21 @@
     "path": "game/third_party/JoltPhysics/Jolt/Core/FixedSizeFreeList.inl",
     "size": 7692,
     "sha256": "a65a0b153fabf473d97476288906d5258e5d5531bf2fb1e63afbb2e6ea7b1f90"
+  },
+  {
+    "path": "game/third_party/JoltPhysics/Jolt/Core/FPControlWord.h",
+    "size": 3214,
+    "sha256": "a81822802d92b30b2946ba87a9baa0396a166281fa3d842b60302010d76b7b03"
+  },
+  {
+    "path": "game/third_party/JoltPhysics/Jolt/Core/FPException.h",
+    "size": 3425,
+    "sha256": "92d7f5d0f74b6acd9a770d31e2abf45444aa5ad926e8311bf5106fdab64ac5ad"
+  },
+  {
+    "path": "game/third_party/JoltPhysics/Jolt/Core/FPFlushDenormals.h",
+    "size": 1442,
+    "sha256": "ff8d916c96da56c8721dc27fc206f856aed16d4ffc38c507f6b8486db31e6931"
   },
   {
     "path": "game/third_party/JoltPhysics/Jolt/Core/HashCombine.h",
@@ -1090,16 +1065,6 @@
     "sha256": "0ec9c7c54d11ead6901bb3246eb1147de7a7b9c129f230810fecbeb5bfbdbd19"
   },
   {
-    "path": "game/third_party/JoltPhysics/Jolt/Core/RTTI.cpp",
-    "size": 3752,
-    "sha256": "9d895076766fcd6ff6ef4f2c4466f074d16dcd0e4a29fec7098e811320a0b4da"
-  },
-  {
-    "path": "game/third_party/JoltPhysics/Jolt/Core/RTTI.h",
-    "size": 17442,
-    "sha256": "271121c17dc3931cfe21d0468c0be8d59d7bb16e288e6612353f04c0975fdf67"
-  },
-  {
     "path": "game/third_party/JoltPhysics/Jolt/Core/Reference.h",
     "size": 10538,
     "sha256": "3b627aa652c3727b02f84a5651b9ac5fa5bf3a81488ad9ad2656e27fd3661cc9"
@@ -1110,24 +1075,14 @@
     "sha256": "def5f0c9354258330ebfc9c8c45bb8931c23be1e80e9fe7ab7a6c395755621bf"
   },
   {
-    "path": "game/third_party/JoltPhysics/Jolt/Core/STLAlignedAllocator.h",
-    "size": 1676,
-    "sha256": "7ff13ec61b072190c9d1e1982e59db710a8cac2c654dabdb4e56cdc129283f27"
+    "path": "game/third_party/JoltPhysics/Jolt/Core/RTTI.cpp",
+    "size": 3752,
+    "sha256": "9d895076766fcd6ff6ef4f2c4466f074d16dcd0e4a29fec7098e811320a0b4da"
   },
   {
-    "path": "game/third_party/JoltPhysics/Jolt/Core/STLAllocator.h",
-    "size": 3962,
-    "sha256": "aaabe69d9b804714a42eb0707525d52bc368d3ac04d4e53c43c8d7f065271b65"
-  },
-  {
-    "path": "game/third_party/JoltPhysics/Jolt/Core/STLLocalAllocator.h",
-    "size": 5963,
-    "sha256": "b28aa63476649383923f5b66d2b5fa009d37a4b063beaeecc07393845c4ceba8"
-  },
-  {
-    "path": "game/third_party/JoltPhysics/Jolt/Core/STLTempAllocator.h",
-    "size": 1987,
-    "sha256": "45f2c849a06d7f71be8d2de87efeb58fcc08f792a1abdc5423f3786a6c4c7b1d"
+    "path": "game/third_party/JoltPhysics/Jolt/Core/RTTI.h",
+    "size": 17442,
+    "sha256": "271121c17dc3931cfe21d0468c0be8d59d7bb16e288e6612353f04c0975fdf67"
   },
   {
     "path": "game/third_party/JoltPhysics/Jolt/Core/ScopeExit.h",
@@ -1148,6 +1103,26 @@
     "path": "game/third_party/JoltPhysics/Jolt/Core/StaticArray.h",
     "size": 7765,
     "sha256": "54091e8cc701224f149530c66ae3f5ec08f5b94c2d1d8ad2a25a171e90665ddd"
+  },
+  {
+    "path": "game/third_party/JoltPhysics/Jolt/Core/STLAlignedAllocator.h",
+    "size": 1676,
+    "sha256": "7ff13ec61b072190c9d1e1982e59db710a8cac2c654dabdb4e56cdc129283f27"
+  },
+  {
+    "path": "game/third_party/JoltPhysics/Jolt/Core/STLAllocator.h",
+    "size": 3962,
+    "sha256": "aaabe69d9b804714a42eb0707525d52bc368d3ac04d4e53c43c8d7f065271b65"
+  },
+  {
+    "path": "game/third_party/JoltPhysics/Jolt/Core/STLLocalAllocator.h",
+    "size": 5963,
+    "sha256": "b28aa63476649383923f5b66d2b5fa009d37a4b063beaeecc07393845c4ceba8"
+  },
+  {
+    "path": "game/third_party/JoltPhysics/Jolt/Core/STLTempAllocator.h",
+    "size": 1987,
+    "sha256": "45f2c849a06d7f71be8d2de87efeb58fcc08f792a1abdc5423f3786a6c4c7b1d"
   },
   {
     "path": "game/third_party/JoltPhysics/Jolt/Core/StreamIn.h",
@@ -1255,6 +1230,11 @@
     "sha256": "c54fa99db96ce9a10892e93045c827ea17fe3dee0f482c7c4458e94b475988ee"
   },
   {
+    "path": "game/third_party/JoltPhysics/Jolt/Geometry/Ellipse.h",
+    "size": 2660,
+    "sha256": "13acebfddded6162869d41cbb9809fd9c12edd7bd2d0e6f9e3d0f141ecd11d2b"
+  },
+  {
     "path": "game/third_party/JoltPhysics/Jolt/Geometry/EPAConvexHullBuilder.h",
     "size": 28554,
     "sha256": "09ba1bb2824c31e35bf9fbe2bcf412821696f65fe47523b23ab5e163f65ac114"
@@ -1263,11 +1243,6 @@
     "path": "game/third_party/JoltPhysics/Jolt/Geometry/EPAPenetrationDepth.h",
     "size": 24815,
     "sha256": "ad2c78c0a9f018855e1517fe18fb925eacd4c836149066fbf9f88d3b3fa29edd"
-  },
-  {
-    "path": "game/third_party/JoltPhysics/Jolt/Geometry/Ellipse.h",
-    "size": 2660,
-    "sha256": "13acebfddded6162869d41cbb9809fd9c12edd7bd2d0e6f9e3d0f141ecd11d2b"
   },
   {
     "path": "game/third_party/JoltPhysics/Jolt/Geometry/GJKClosestPoint.h",
@@ -1380,6 +1355,11 @@
     "sha256": "adad6cc52efa96189a72111db40ff1647bbbfe201d5f57ebc7e3f4f93bf5a414"
   },
   {
+    "path": "game/third_party/JoltPhysics/Jolt/Math/Double3.h",
+    "size": 1247,
+    "sha256": "b159e1c984bcdd1c03a654341304ace9c0648dc6fb57e04352263ec2c0cc91bd"
+  },
+  {
     "path": "game/third_party/JoltPhysics/Jolt/Math/DVec3.h",
     "size": 10582,
     "sha256": "d5c4823980df2221e397eac3e4f9c02f0ce7581c82757f7f2049048c96e02570"
@@ -1388,11 +1368,6 @@
     "path": "game/third_party/JoltPhysics/Jolt/Math/DVec3.inl",
     "size": 34291,
     "sha256": "1035b65a9113e1bd7bc5c56d78de098ba2826b982854def8af9aeb32494f31d6"
-  },
-  {
-    "path": "game/third_party/JoltPhysics/Jolt/Math/Double3.h",
-    "size": 1247,
-    "sha256": "b159e1c984bcdd1c03a654341304ace9c0648dc6fb57e04352263ec2c0cc91bd"
   },
   {
     "path": "game/third_party/JoltPhysics/Jolt/Math/DynMatrix.h",
@@ -2265,11 +2240,6 @@
     "sha256": "5f4e1746b242eb901e9df8477f49e2be4e99e7f63f4ff81ef813720a04ceab76"
   },
   {
-    "path": "game/third_party/JoltPhysics/Jolt/Physics/Collision/Shape/ScaleHelpers.h",
-    "size": 4641,
-    "sha256": "c941cac576b44ec4252d467a168d26f33218e60443d6bbbd507a794d4bcf57a8"
-  },
-  {
     "path": "game/third_party/JoltPhysics/Jolt/Physics/Collision/Shape/ScaledShape.cpp",
     "size": 11341,
     "sha256": "5e507d5c99ac695ea66e64baa51c89f833dc16e68cafd2522bd5501e26731a25"
@@ -2278,6 +2248,11 @@
     "path": "game/third_party/JoltPhysics/Jolt/Physics/Collision/Shape/ScaledShape.h",
     "size": 8483,
     "sha256": "2256abeb09143650af6ecaf92d7ea8d26981118fe9455eb158af449ec6801665"
+  },
+  {
+    "path": "game/third_party/JoltPhysics/Jolt/Physics/Collision/Shape/ScaleHelpers.h",
+    "size": 4641,
+    "sha256": "c941cac576b44ec4252d467a168d26f33218e60443d6bbbd507a794d4bcf57a8"
   },
   {
     "path": "game/third_party/JoltPhysics/Jolt/Physics/Collision/Shape/Shape.cpp",
@@ -3415,11 +3390,6 @@
     "sha256": "43d23998e09aa22094f11a1e0483759e03089ae5f0a67292d5179d609d0a24da"
   },
   {
-    "path": "game/third_party/recastnavigation/Roadmap.md",
-    "size": 8644,
-    "sha256": "f4e0f8d2a7177513b019bb6ae90e8aa9d4d8ae0fcfc9afa42c9ad54f8b5059a9"
-  },
-  {
     "path": "game/third_party/recastnavigation/recastnavigation-config.cmake.in",
     "size": 87,
     "sha256": "11f6dd5b72d6bbe5a85590f8a3fc886364569019576e8c6d9bcaacb5cdc71a3e"
@@ -3428,6 +3398,11 @@
     "path": "game/third_party/recastnavigation/recastnavigation.pc.in",
     "size": 396,
     "sha256": "1138fab4a6dc9ef05f8371a12f2eb6a110d5654f5d560ecaafc8c865bf243438"
+  },
+  {
+    "path": "game/third_party/recastnavigation/Roadmap.md",
+    "size": 8644,
+    "sha256": "f4e0f8d2a7177513b019bb6ae90e8aa9d4d8ae0fcfc9afa42c9ad54f8b5059a9"
   },
   {
     "path": "game/third_party/recastnavigation/version.h.in",
@@ -3440,14 +3415,14 @@
     "sha256": "bebfe904b14301657e4e5d655c811d51fd31b97c455b9cc2d8600d6bac6cff63"
   },
   {
-    "path": "game/third_party/stb/VERSION.txt",
-    "size": 42,
-    "sha256": "6ea83037f170659f2713841af9a8affd094bf82c8228dfec939021bb0f608d83"
-  },
-  {
     "path": "game/third_party/stb/stb_image_write.h",
     "size": 71221,
     "sha256": "cbd5f0ad7a9cf4468affb36354a1d2338034f2c12473cf1a8e32053cb6914a05"
+  },
+  {
+    "path": "game/third_party/stb/VERSION.txt",
+    "size": 42,
+    "sha256": "6ea83037f170659f2713841af9a8affd094bf82c8228dfec939021bb0f608d83"
   },
   {
     "path": "game/tools/add-input-overlay.py",
@@ -3493,6 +3468,11 @@
     "path": "game/tools/test-scene-config.cpp",
     "size": 1983,
     "sha256": "dd9b590f9002888beca23bc2188f9831829abbdcacff3e6e30a31b2f10c18378"
+  },
+  {
+    "path": "LICENSE",
+    "size": 11357,
+    "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
   },
   {
     "path": "licenses/MG4CF-LICENSE",
@@ -3546,8 +3526,8 @@
   },
   {
     "path": "matrix_game/inference/loader.py",
-    "size": 5339,
-    "sha256": "fa2525133e1358348a14e78052bd0f55ec5c36298df322e5f2ada982662b4aef"
+    "size": 7641,
+    "sha256": "90b4551321acc919c6faed81c4c02581ea255b18741ee617f649b9755b6d4938"
   },
   {
     "path": "matrix_game/inference/loading.py",
@@ -3556,8 +3536,8 @@
   },
   {
     "path": "matrix_game/inference/offline.py",
-    "size": 7228,
-    "sha256": "f1598940605cc1eb7770a2e0fb22e58324c272b6c25d8b265ecaa8d85d89d148"
+    "size": 7559,
+    "sha256": "26f1ea21d124701a2a954dbf17262fd44c89c6ac226032568525d2d71edfdf95"
   },
   {
     "path": "matrix_game/inference/preprocessing.py",
@@ -3573,6 +3553,126 @@
     "path": "matrix_game/inference/rope_kernel.py",
     "size": 7196,
     "sha256": "10940995cc02f18ae15f0688f2d2feccf4ee406b2cd7d6a05432a91589bfc480"
+  },
+  {
+    "path": "matrix_game/inference/rtx5070ti/__init__.py",
+    "size": 1112,
+    "sha256": "c72e74398e9a9678e6c49b520ba7ca793455866fcf2092f5aca475572d1ea613"
+  },
+  {
+    "path": "matrix_game/inference/rtx5070ti/config.py",
+    "size": 1762,
+    "sha256": "c225057b8b162c72e8704188909eb567a4b80bad2b097e3c95acf1857067293e"
+  },
+  {
+    "path": "matrix_game/inference/rtx5070ti/linear.py",
+    "size": 14180,
+    "sha256": "bd88e0f50a20ae647af021daaa894caa7f42a5b11626e7ed33f7294ad3864902"
+  },
+  {
+    "path": "matrix_game/inference/rtx5070ti/model.py",
+    "size": 4142,
+    "sha256": "16a8f6b33372083a87c6e78852a28ac78189d9e2d648e69a06a5e56899c35a7a"
+  },
+  {
+    "path": "matrix_game/inference/rtx5070ti/sage.py",
+    "size": 5435,
+    "sha256": "8509c61d293e560e5a97b408de0fafe3289749c38666097b9da29fdd7e12c60b"
+  },
+  {
+    "path": "matrix_game/inference/rtx5080/__init__.py",
+    "size": 313,
+    "sha256": "6717f06b5a027fcbd7ce880b275a7dba3084aceaa011f8af45e05231137911df"
+  },
+  {
+    "path": "matrix_game/inference/rtx5080/linears.py",
+    "size": 9167,
+    "sha256": "6581d7dcd590852933639cf8a95e000e5ffb6ec21447342c0ff78e589556d11a"
+  },
+  {
+    "path": "matrix_game/inference/rtx5080/model.py",
+    "size": 3337,
+    "sha256": "bd5a01d774d1630896abc7193b3fdc0e26c4656852bd9680adbb3339e48c48d5"
+  },
+  {
+    "path": "matrix_game/inference/rtx5080/self_attention.py",
+    "size": 429,
+    "sha256": "d1a7ad3bd2a47d34e4b459d56c4c35cb113c86aac3eb1cfcd2473ce3957a9986"
+  },
+  {
+    "path": "matrix_game/inference/rtx5080/stream.py",
+    "size": 4147,
+    "sha256": "24cf9308aafceb0075be50a48221dba559484ac86660253e2194c0d34b5cf1d4"
+  },
+  {
+    "path": "matrix_game/inference/rtx5080/text_attention.py",
+    "size": 2421,
+    "sha256": "14f2765b014ce1e17597432dea240f44c64c0649ab805c842f8f06dbb2e9fdf9"
+  },
+  {
+    "path": "matrix_game/inference/rtx5090/__init__.py",
+    "size": 412,
+    "sha256": "2d1de03b91f3e588c971f526f90204a4a04c326c6d0b9abfbe557b545f0c49b5"
+  },
+  {
+    "path": "matrix_game/inference/rtx5090/attention.py",
+    "size": 741,
+    "sha256": "117bc8cf15e802b100c43a90769e93a51451f4d21c655ec624809b5b86982028"
+  },
+  {
+    "path": "matrix_game/inference/rtx5090/base_model.py",
+    "size": 16942,
+    "sha256": "2e64cdf5421b2d8c57d4ace3416e3ee838c009c8d11080240fe83893ceafd3d6"
+  },
+  {
+    "path": "matrix_game/inference/rtx5090/block.py",
+    "size": 4801,
+    "sha256": "0a998d8526d70b6a93246ce618271c15303d77cdd6fe9cb9c04da104a8ba065a"
+  },
+  {
+    "path": "matrix_game/inference/rtx5090/block_graph.py",
+    "size": 7880,
+    "sha256": "cd3acc98e7e817f7057ac8b0e049cb1abd800fb770396648493647027579e967"
+  },
+  {
+    "path": "matrix_game/inference/rtx5090/causal_model.py",
+    "size": 15843,
+    "sha256": "3d712eeca1a5ed56ae78a05e3a0772b2a84bd82e81c330be92eee7789e8b871b"
+  },
+  {
+    "path": "matrix_game/inference/rtx5090/fp8_linear.py",
+    "size": 9057,
+    "sha256": "e2816dc2df966b9abb8ba4fa0ae7ede0b80873f14b3aee961ac966ea917b612b"
+  },
+  {
+    "path": "matrix_game/inference/rtx5090/kernels.py",
+    "size": 18769,
+    "sha256": "cf03eb03931971a7cd7365ee945328ece39dc47c8d993c1b394330d258fa63b3"
+  },
+  {
+    "path": "matrix_game/inference/rtx5090/stream.py",
+    "size": 14071,
+    "sha256": "65832b5d56e8d5a21e549bd095ddc5fcb7181f355abf7d7dad73f1d5e89f35e8"
+  },
+  {
+    "path": "matrix_game/inference/rtx5090_sage/__init__.py",
+    "size": 102,
+    "sha256": "86adfe77f28ca19a328848ab1c7e9d43deb680576795f9cfc0a58292f457ab45"
+  },
+  {
+    "path": "matrix_game/inference/rtx5090_sage/causal_model.py",
+    "size": 2074,
+    "sha256": "e5f1c90d8d82a17529987ef65f8cdda2175f0f51079a713339289cfcb6a0e7a5"
+  },
+  {
+    "path": "matrix_game/inference/rtx5090_sage/sage_attention.py",
+    "size": 10843,
+    "sha256": "fb156a020feb073cdd2f5615c2e384618b82277a01403d9b6ba60db8e0d7d311"
+  },
+  {
+    "path": "matrix_game/inference/rtx5090_sage/sageattention.patch",
+    "size": 17522,
+    "sha256": "c5845fc141ed2c7d62e3060c7384ab182c42385bd8cef0e111d8b096d5082003"
   },
   {
     "path": "matrix_game/inference/runtime.py",
@@ -3671,8 +3771,8 @@
   },
   {
     "path": "matrix_game/scenes.py",
-    "size": 4264,
-    "sha256": "47533f78b6784ca5059e44d61cc715677220ff3790fe040b24f70324ce0f8f13"
+    "size": 4798,
+    "sha256": "59643ce56d482ea7937e65c200dab434d70c76531d247be62bd202320e00801b"
   },
   {
     "path": "matrix_game/server/__init__.py",
@@ -3735,14 +3835,14 @@
     "sha256": "692c7f4a7034bdd2301b1661b0921d95393b42ec064b825992e3c991c33e652f"
   },
   {
-    "path": "matrix_game/web/mediamtx-reader.LICENSE",
-    "size": 1062,
-    "sha256": "ecae73b0a23185a35a1222edc0aae5245bb9739420bad0125b0c42e935301a80"
-  },
-  {
     "path": "matrix_game/web/mediamtx-reader.js",
     "size": 18929,
     "sha256": "a802f229b803c33713d4c69c4cc0d480108a5bf384947aeee4aaf04268bf85c1"
+  },
+  {
+    "path": "matrix_game/web/mediamtx-reader.LICENSE",
+    "size": 1062,
+    "sha256": "ecae73b0a23185a35a1222edc0aae5245bb9739420bad0125b0c42e935301a80"
   },
   {
     "path": "matrix_game/web/racing.js",
@@ -3750,14 +3850,24 @@
     "sha256": "43b4408389271023f3599d662f00b9274b44e299f630b3c2f2c458b73db2bc09"
   },
   {
+    "path": "NOTICE",
+    "size": 378,
+    "sha256": "c501ad403bcf41cf0c3c9286c3f7c787d7e9714d754ed1dc49141333154f543c"
+  },
+  {
     "path": "pyproject.toml",
     "size": 1282,
     "sha256": "2bef281ee5254bdc3060db72def2c59fc1cff2b90d4720dbd8db1b1cc500a63d"
   },
   {
-    "path": "releases/README.md",
-    "size": 3902,
-    "sha256": "24ce760405ff7015b8a2a552c5d789c251031761577b70ccf56a95345c893467"
+    "path": "README.md",
+    "size": 15061,
+    "sha256": "1c3b8dffd12ea7ab2e6e296f56973cdd9b57f570ea14997a4281b09b7203d0bb"
+  },
+  {
+    "path": "releases/config.json",
+    "size": 1578,
+    "sha256": "705a2ac4b8220990983522a7cf01e2e71c9a7d80d2bc0b2345f298177a977c2f"
   },
   {
     "path": "releases/game-assets.json",
@@ -3766,8 +3876,18 @@
   },
   {
     "path": "releases/models.json",
-    "size": 6031,
-    "sha256": "44f23435f06f3497fb6377b0e1dd73b2c5a691bd79a963126c86792b1bfc4309"
+    "size": 6230,
+    "sha256": "6c363a55eb4b84ebba4d8aa9fa3f93b24beb9e101c1719fb286f76f4a19c4604"
+  },
+  {
+    "path": "releases/README.md",
+    "size": 5073,
+    "sha256": "e20027ff12c02956833a364c0388697b565d3aa8aa15edb8026147774abe255d"
+  },
+  {
+    "path": "scripts/build_game.ps1",
+    "size": 4427,
+    "sha256": "18865894a2b1c07b4da7d63543a94f7840a863c869e689790eafb6a5fc90e27d"
   },
   {
     "path": "scripts/build_game.sh",
@@ -3798,6 +3918,11 @@
     "path": "scripts/serve.sh",
     "size": 512,
     "sha256": "a57d08cf85148a42bfc1554026f441ca1892932ba98ce5921d0a73370ffcb254"
+  },
+  {
+    "path": "SECURITY.md",
+    "size": 1523,
+    "sha256": "b7336ea5f7815b33916a5bc51883962ae4d68f1af6a6a496f10475cc11b4fd60"
   },
   {
     "path": "tests/browser/test_audio.cjs",
@@ -3891,12 +4016,17 @@
   },
   {
     "path": "tests/test_resources.py",
-    "size": 7177,
-    "sha256": "abfb558be971dd3d121ee7486aa422864c8c68bebdde855e1245b5fe30b8ff33"
+    "size": 11220,
+    "sha256": "4f0116864860ac0ccd1a5bbb6bad827d4da1f2b4f61cc16e6fcb6b6edde3706f"
   },
   {
     "path": "tests/test_sink.py",
     "size": 7717,
     "sha256": "7a7a4b593415aacf6b2228c30ccb28ac9aa49809ea1e39ec6d387bbcabbf6797"
+  },
+  {
+    "path": "THIRD_PARTY_NOTICES.md",
+    "size": 2614,
+    "sha256": "d25466469581d8ab4342203796d88d2bfcfbddc284dec7a8bfc6ca56afe1a8e1"
   }
 ]
