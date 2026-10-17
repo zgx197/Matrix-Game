@@ -87,13 +87,15 @@ def main(argv=None):
         stream = CastleStream(components.gen, components.vae, components.prompt,
                               seed=args.seed, vae_backend=args.vae_backend, steps=args.steps,
                               first_steps=args.first_steps, sink_latent=components.sink_latent,
-                              sink_mode=args.sink_mode, sink_rope_mode=args.sink_rope_mode)
+                              sink_mode=args.sink_mode, sink_rope_mode=args.sink_rope_mode,
+                              size=args.size)
         if args.captions:
             caption_file = args.captions.open()
         current_prompt = args.prompt
         args.output.mkdir(parents=True)
         partial = args.output / "rendered.partial.mp4"
-        writer = imageio_ffmpeg.write_frames(str(partial), (864, 480), fps=fps, codec="libx264",
+        out_height, out_width = args.size
+        writer = imageio_ffmpeg.write_frames(str(partial), (out_width, out_height), fps=fps, codec="libx264",
                     pix_fmt_in="rgb24", pix_fmt_out="yuv420p", macro_block_size=1,
                     output_params=["-crf", "16", "-preset", "fast", "-movflags", "+faststart"])
         writer.send(None)
@@ -110,7 +112,8 @@ def main(argv=None):
                 if index % args.prompt_interval_chunks == 0 and candidate != current_prompt:
                     stream.set_prompt(components.caption_encoder(candidate))
                     current_prompt = candidate
-            frames = [crop_and_resize(Image.fromarray(np.frombuffer(r, np.uint8).reshape(height, width, 3)), 480, 864) for r in raw]
+            frames = [crop_and_resize(Image.fromarray(np.frombuffer(r, np.uint8).reshape(height, width, 3)),
+                                      out_height, out_width) for r in raw]
             result = stream.push(frames_to_tensor(frames), frame_start=written)
             rgb = tensor_to_uint8(result.pixels)[:valid]
             if len(rgb) != valid:
@@ -134,7 +137,7 @@ def main(argv=None):
             count = sum(1 for _ in check)
         finally:
             check.close()
-        if count != written or encoded["size"] != (864, 480) or abs(encoded["fps"] - fps) > .01:
+        if count != written or encoded["size"] != (out_width, out_height) or abs(encoded["fps"] - fps) > .01:
             raise RuntimeError("Encoded output failed frame-count verification")
         partial.rename(args.output / "rendered.mp4")
         report = dict(components.config(), frames=written, padded_frames=padded, fps=fps,

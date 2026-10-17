@@ -36,11 +36,13 @@ def add_model_arguments(parser):
     parser.add_argument("--resources", type=Path, default=Path("resources"))
     for key in ("model-dir", "checkpoint", "taehv-path", "asset-root"):
         parser.add_argument("--" + key, type=Path)
-    parser.add_argument("--preset", choices=("realtime", "quality", "baseline") + OPTIMIZED_RUNTIMES, default="realtime")
+    parser.add_argument("--preset", choices=("realtime", "quality", "baseline", "rocm") + OPTIMIZED_RUNTIMES, default="realtime")
     parser.add_argument("--vae-backend", choices=("wan", "taehv"))
     parser.add_argument("--dit-runtime", choices=("native", "kernels", "cudagraph", "ring", "ring-graph", "ring-fused") + OPTIMIZED_RUNTIMES)
     parser.add_argument("--steps", type=parse_steps)
     parser.add_argument("--first-steps", type=parse_steps)
+    parser.add_argument("--size", type=parse_size, default=(480, 864),
+                        help="Output HxW; both axes must be multiples of 16 (default 480x864)")
     parser.add_argument("--vae-graph", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--prompt-mode", choices=("fixed", "dynamic"), default="fixed")
     parser.add_argument("--prompt", help="Override the fixed scene caption")
@@ -66,21 +68,39 @@ def parse_steps(value):
         raise argparse.ArgumentTypeError("Timesteps must decrease strictly from 1000") from None
 
 
+def parse_size(value):
+    """HxW output size. TAEHV encodes with ceil division, so 16-multiples are required."""
+    import argparse
+    try:
+        height, width = (int(part) for part in str(value).lower().split("x"))
+    except ValueError:
+        raise argparse.ArgumentTypeError("Size must be HxW, for example 352x640") from None
+    if height % 16 or width % 16 or height < 64 or width < 64:
+        raise argparse.ArgumentTypeError("Both axes must be multiples of 16 and at least 64")
+    return height, width
+
+
 def resolve_model_arguments(args, require_model=True):
     configure_scene(args)
     if args.prompt_mode == "dynamic" and args.scene != "racing":
         raise ValueError("Dynamic captions are currently supported for racing only")
     if not 1 <= args.prompt_interval_chunks <= 1024:
         raise ValueError("Prompt interval must be 1..1024 chunks")
-    realtime = args.preset == "realtime" or args.preset in OPTIMIZED_RUNTIMES
+    realtime = args.preset in ("realtime", "rocm") or args.preset in OPTIMIZED_RUNTIMES
     if args.preset in OPTIMIZED_RUNTIMES:
         args.dit_runtime = args.dit_runtime or args.preset
     if args.dit_runtime in FIXED_PROMPT_RUNTIMES and args.prompt_mode == "dynamic":
         raise ValueError(f"The {args.dit_runtime} runtime supports fixed prompts only")
     args.vae_backend = args.vae_backend or ("taehv" if realtime else "wan")
-    args.dit_runtime = args.dit_runtime or ("ring-fused" if args.preset == "realtime" else "native")
+    if args.dit_runtime is None:
+        args.dit_runtime = {"realtime": "ring-fused", "rocm": "kernels"}.get(args.preset, "native")
     args.steps = args.steps or ((1000,) if realtime else (1000, 500))
     args.first_steps = args.first_steps or args.steps
+    if args.preset == "rocm":
+        # Validated on gfx1100: TAEHV + one step + the host-planned runtime, at a
+        # size the caller chooses. T5 graph capture is untested on ROCm.
+        args.vae_graph = False
+        args.t5_runtime = "native"
     if args.vae_graph is None:
         args.vae_graph = realtime and args.vae_backend == "taehv"
     if args.vae_graph and args.vae_backend != "taehv":

@@ -97,7 +97,8 @@ class ModelComponents:
         if self.args.sink_image is not None:
             from matrix_game.inference.stream import encode_sink_image
             self.sink_latent = encode_sink_image(self.vae, self.args.sink_image, self.args.vae_backend,
-                first_frame=self.args.sink_mode == "first_frame").to(device, dtype)
+                first_frame=self.args.sink_mode == "first_frame",
+                size=getattr(self.args, "size", (480, 864))).to(device, dtype)
             self.sink_sha256 = hashlib.sha256(self.args.sink_image.read_bytes()).hexdigest()
         if self.args.dit_runtime.startswith(("rtx5090", "rtx5080", "rtx5070ti")):
             warm_up = self._runtime().warm_up
@@ -134,12 +135,14 @@ class ModelComponents:
         return CastleStream(self.gen, self.vae, self.prompt, vae_backend=self.args.vae_backend,
                             steps=self.args.steps, first_steps=self.args.first_steps,
                             sink_latent=self.sink_latent, sink_mode=self.args.sink_mode,
-                            sink_rope_mode=self.args.sink_rope_mode, **kwargs)
+                            sink_rope_mode=self.args.sink_rope_mode,
+                            size=getattr(self.args, "size", (480, 864)), **kwargs)
 
     def config(self):
         return dict(scene=self.args.scene, scene_name=SCENES[self.args.scene]["name"],
                     checkpoint=self.args.checkpoint.name, ckpt_keys=["generator_ema"],
                     vae_backend=self.args.vae_backend, steps=list(self.args.steps),
+                    size=list(getattr(self.args, "size", (480, 864))),
                     first_steps=list(self.args.first_steps), sink_rope_mode=self.args.sink_rope_mode,
                     sink_mode=self.args.sink_mode, sink_encoder=self.args.vae_backend,
                     sink_source="image" if self.args.sink_image is not None else "generated_first_frame",
