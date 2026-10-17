@@ -950,3 +950,10 @@ NNNNNN.semantic_id.png  336×192，8-bit 灰度，取值 0–11：
 - 新增问题时：先记入 §9，写明现象 / 根因 / 解决，避免重复踩坑。
 - 风险状态变化时：更新 §10 的"状态"列，已排除的保留记录而不是删除。
 - 本文档不随源码发布打包（不在 `package_release.py` 的 `PUBLIC_DOCS` 名单内）。
+
+### 19.1 相关文档
+
+| 文档 | 用途 |
+| --- | --- |
+| [inference-optimization-survey.md](inference-optimization-survey.md) | 推理侧优化候选清单（不动基模）：原理、代码落点、预期收益、风险与验收口径 |
+| [inference-optimization-matrix.md](inference-optimization-matrix.md) | 上述候选的实验数据登记表，逐项填写 |
