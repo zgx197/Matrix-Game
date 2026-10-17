@@ -158,7 +158,8 @@ class CastleRuntime:
         from matrix_game.inference.wan.modules.causal_model import _sp_on
         from matrix_game.inference.rope_kernel import build_causal_rope_rotations
         if (unsupported or torch.is_grad_enabled() or model.training or _sp_on()
-                or sink_rope_mode not in (None, "absolute", "fixed") or x.dtype != torch.bfloat16
+                or sink_rope_mode not in (None, "absolute", "fixed")
+                or x.dtype not in (torch.bfloat16, torch.float16)
                 or not x.is_cuda or FLASH_ATTN_3_AVAILABLE):
             raise ValueError(f"Unsupported runtime: extra={unsupported}, grad={torch.is_grad_enabled()}, "
                              f"training={model.training}, sp={_sp_on()}, sink={sink_rope_mode}, "
