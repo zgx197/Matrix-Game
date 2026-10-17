@@ -129,7 +129,7 @@
 | ID | 级别 | 文件 | 改动 | 状态 |
 | --- | --- | --- | --- | --- |
 | C1 | 必须 | `pyproject.toml` | 新增 `rocm` extra（不锁 torch） | ✅ `4abdd59` |
-| C2 | 必须 | `inference/loader.py` | prompt 编码提前到 DiT 构建之前 | ⬜ |
+| C2 | 必须 | `inference/loader.py` | prompt 编码提前到 DiT 构建之前 | ✅ `ed47573` |
 | C3 | 必须 | `inference/loader.py`、`scenes.py` | 设备/精度可配置（默认仍 cuda/bf16） | ✅ `9f76a2f` |
 | C4 | 建议 | `inference/text.py` | CUDA Graph 能力探测 + 自动回退 | ⬜ |
 | C5 | 建议 | `scenes.py` / CLI | 增加 `--preset rocm` | ⬜ |
@@ -290,6 +290,35 @@ venv 体积从 10.82 GB 增至 **11.1 GB**。
 
 **下一步**：重启使页面文件扩容生效，然后进入 P2 权重下载（22.5 GB）。
 
+### 阶段 5 · P2 权重下载（进行中）
+
+重启后复核页面文件：`AllocatedBaseSize` = 32768 MB，虚拟内存总量 63.9 GB，S1 关闭。
+
+下载 **16 个文件 / 22.6 GiB**，其中 6 个来自 `alibaba-pai/Wan2.2-Fun-5B-Control`
+（T5、Wan2.2 VAE、umT5 tokenizer），10 个来自 `Skywork/Matrix-Game-4.0`。
+
+| 文件 | 大小 |
+| --- | --- |
+| `base/models_t5_umt5-xxl-enc-bf16.pth` | 10,835.6 MiB |
+| `models/ancient-egypt/model.safetensors` | ~9.3 GiB |
+| `base/Wan2.2_VAE.pth` | ~1 GiB |
+| 其余 13 个（tokenizer、taehv、sink、许可、配置） | 合计 <100 MiB |
+
+**实测网络**（本机代理 `127.0.0.1:7897`）
+
+| 路线 | 速率 |
+| --- | --- |
+| huggingface.co 直连 | ❌ 连接超时（被墙） |
+| huggingface.co 经代理（单连接） | ✅ **约 4 MB/s**（峰值曾达 18.6 MB/s） |
+| `hf-mirror.com`（直连或经代理） | 1.7 MB/s，更慢 |
+| 8 路并行 Range 请求 | 聚合 3.6 MB/s，无提升 |
+
+结论：瓶颈是代理总带宽，不是单连接限制，并行与镜像都无收益。
+按 4 MB/s 估算，22.6 GiB 约需 **60–90 分钟**。
+
+下载脚本 `fetch_assets.py` 本次增强：支持 `Range` 断点续传、每个文件最多 6 次重试、
+每 256 MiB 打印进度、按条目解析 `repo_id`/`repo_type`/`revision`。
+
 ---
 
 ## 9. 问题与解决记录
@@ -306,16 +335,20 @@ venv 体积从 10.82 GB 增至 **11.1 GB**。
 | 8 | Windows 上 `source-manifest.json` 大量校验不匹配 | 全局 `core.autocrlf=true` 把 LF 转成 CRLF | 仓库级 `core.autocrlf=false` 并重新检出；校验恢复 773/780，剩余 7 条为真实的清单过期 |
 | 9 | 用 PowerShell 批量替换文档内容后中文全部变成乱码 | PowerShell 5.1 的 `Set-Content` 默认按 ANSI 写盘，UTF-8 内容被破坏 | `git checkout` 回滚后改用编辑工具逐处修改；此后所有文本改动都走编辑工具，并校验 `U+FFFD` 计数为 0 |
 | 10 | 页面文件只有 2.9 GB，加载 22 GB 权重时可能 OOM | `PagingFiles` 为 `E:\pagefile.sys 0 0`（系统托管），Windows 按内存比例给了小值 | 以管理员权限把注册表改为 `E:\pagefile.sys 32768 65536`（`set-pagefile.ps1`），重启生效 |
+| 11 | 重启后权重下载全部 `ConnectTimeout` | 重启后 `HTTP_PROXY`/`HTTPS_PROXY` 环境变量消失（代理客户端只注入会话级变量）；而脚本又单独设置了 `NO_PROXY`，requests 见到"只有 no 键"的环境代理字典便不再读取 Windows 注册表代理，于是走了直连 | 下载命令显式传 `HTTP(S)_PROXY=http://127.0.0.1:7897`，且**不要**单独设 `NO_PROXY`；已写入脚本注释 |
+| 12 | 下载基础模型文件报 `HTTP 404` | `models.json` 里 T5/VAE/tokenizer 有**条目级** `repo_id`/`revision` 覆盖（来自 `alibaba-pai/Wan2.2-Fun-5B-Control`），脚本只用了命令行给的仓库 | 改为逐条目解析 `repo_id` + `repo_type` + `revision` + `repo_path` 生成 URL |
+| 13 | 测试套件 3 个用例报 `ModuleNotFoundError: aiohttp` | `rocm` extra 不含 `server` extra，而 `test_chunk_profile` / `test_display` / `test_cli` 会导入 `matrix_game.server.app` | 在 venv 内补装 `aiohttp>=3.10,<4`；测试 77 项中 75 项通过 |
+| 14 | 2 个测试报 `WinError 1314`（客户端没有所需的特权） | `test_reject_link` / `test_path_boundary` 会创建符号链接，Windows 需要管理员或开发者模式 | 属环境限制而非代码缺陷；以管理员运行或开启开发者模式即可通过，本次记为已知偏差 |
 
 **页面文件变更记录（S1）**
 
 | 项 | 值 |
 | --- | --- |
 | 变更前 | `E:\pagefile.sys 0 0`（系统托管，实占 2944 MB） |
-| 变更后 | `E:\pagefile.sys 32768 65536`（注册表已写入，待重启） |
+| 变更后 | `E:\pagefile.sys 32768 65536` |
 | 为什么放 E: | C: 与 D: 同属 Disk 0，E: 是 Disk 1；页面文件与模型权重分处不同物理盘，避免 I/O 争抢 |
 | 执行方式 | `Start-Process -Verb RunAs` 提权运行 `D:\work\matrix-game-artifacts\set-pagefile.ps1`，日志见同目录 `pagefile-change.log` |
-| 重启后验证 | `Get-CimInstance Win32_PageFileUsage` 的 `AllocatedBaseSize` 应为 32768 左右 |
+| 重启后验证 | ✅ 已通过：重启后 `Win32_PageFileUsage` 的 `AllocatedBaseSize` = **32768 MB**，虚拟内存总量 63.9 GB，E: 余量由 78.8 GB 降至 49.8 GB |
 
 ---
 
