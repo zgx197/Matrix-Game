@@ -40,17 +40,17 @@ def add_model_arguments(parser):
     parser.add_argument("--resources", type=Path, default=Path("resources"))
     for key in ("model-dir", "checkpoint", "taehv-path", "asset-root"):
         parser.add_argument("--" + key, type=Path)
-    parser.add_argument("--preset", choices=("realtime", "quality", "baseline", "rocm") + OPTIMIZED_RUNTIMES, default="realtime")
+    parser.add_argument("--preset", choices=("realtime", "quality", "baseline", "rocm", "rocm-fast") + OPTIMIZED_RUNTIMES, default="realtime")
     parser.add_argument("--vae-backend", choices=("wan", "taehv"))
     parser.add_argument("--dit-runtime", choices=("native", "kernels", "cudagraph", "ring", "ring-graph", "ring-fused") + OPTIMIZED_RUNTIMES)
     parser.add_argument("--steps", type=parse_steps)
     parser.add_argument("--first-steps", type=parse_steps)
     parser.add_argument("--size", type=parse_size, default=(480, 864),
                         help="Output HxW; both axes must be multiples of 16 (default 480x864)")
-    parser.add_argument("--window", type=parse_window, default=21,
+    parser.add_argument("--window", type=parse_window, default=None,
                         help="KV attention window in latent frames (default 21, the released setting). "
                              "Shorter is faster and shortens long-range memory; 12 measures 14%% faster at 480p.")
-    parser.add_argument("--clean-every", type=int, default=1,
+    parser.add_argument("--clean-every", type=int, default=None,
                         help="Refresh the clean KV every N chunks (default 1 = every chunk). "
                              "Skipping it trades long-run fidelity for a full forward per skipped chunk.")
     parser.add_argument("--clean-adaptive", action="store_true",
@@ -114,17 +114,27 @@ def resolve_model_arguments(args, require_model=True):
         raise ValueError("Dynamic captions are currently supported for racing only")
     if not 1 <= args.prompt_interval_chunks <= 1024:
         raise ValueError("Prompt interval must be 1..1024 chunks")
-    realtime = args.preset in ("realtime", "rocm") or args.preset in OPTIMIZED_RUNTIMES
+    realtime = args.preset in ("realtime", "rocm", "rocm-fast") or args.preset in OPTIMIZED_RUNTIMES
     if args.preset in OPTIMIZED_RUNTIMES:
         args.dit_runtime = args.dit_runtime or args.preset
     if args.dit_runtime in FIXED_PROMPT_RUNTIMES and args.prompt_mode == "dynamic":
         raise ValueError(f"The {args.dit_runtime} runtime supports fixed prompts only")
     args.vae_backend = args.vae_backend or ("taehv" if realtime else "wan")
     if args.dit_runtime is None:
-        args.dit_runtime = {"realtime": "ring-fused", "rocm": "kernels"}.get(args.preset, "native")
+        args.dit_runtime = {"realtime": "ring-fused", "rocm": "kernels",
+                            "rocm-fast": "kernels"}.get(args.preset, "native")
     args.steps = args.steps or ((1000,) if realtime else (1000, 500))
     args.first_steps = args.first_steps or args.steps
-    if args.preset == "rocm":
+    if args.preset == "rocm-fast":
+        # The tuned pair from the optimization survey: both changes passed the
+        # proxy-following check, and together they are +63% at 480p, +51% at 288p.
+        # An explicit --window / --clean-every still wins over the preset.
+        args.window = 12 if args.window is None else args.window
+        args.clean_every = 4 if args.clean_every is None else args.clean_every
+    else:
+        args.window = 21 if args.window is None else args.window
+        args.clean_every = 1 if args.clean_every is None else args.clean_every
+    if args.preset in ("rocm", "rocm-fast"):
         # Validated on gfx1100: TAEHV + one step + the host-planned runtime, at a
         # size the caller chooses. T5 graph capture is untested on ROCm.
         args.vae_graph = False
