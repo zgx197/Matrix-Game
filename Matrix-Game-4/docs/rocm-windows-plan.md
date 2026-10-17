@@ -18,7 +18,8 @@
 | P4 | 性能基线与优化 | ⬜ 未开始 |
 | P5 | 交互可行性（需 ≥15 FPS） | ⬜ 未开始 |
 
-当前的系统级障碍只剩一项：**页面文件仍为 2.9 GB**（见 §3 S1），进入 P2 前必须调整。
+系统级准备：页面文件已由 2.9 GB 改为 `E:` 上 32–64 GB（注册表已写入，**重启后生效**，见 §3 S1）。
+其余待办为电源计划与 Defender 排除，均不阻塞 P2。
 
 ---
 
@@ -44,7 +45,7 @@
 
 | # | 项目 | 状态 | 说明 |
 | --- | --- | --- | --- |
-| S1 | 页面文件 D: 32768–65536 MB | ⬜ **待办** | 当前 2.9 GB 在 E:，权重加载时极易 OOM；需管理员权限 + 重启 |
+| S1 | 页面文件 `E:` 32768–65536 MB | ✅ 已设置（待重启生效） | 原为 2.9 GB；放 E: 而非 D:，因为 C:/D: 同属 Disk 0，E: 是独立的 Disk 1，可避免与权重 I/O 争抢 |
 | S2 | 电源计划改「高性能」 | ⬜ 待办 | 当前「平衡」；长时间推理避免降频 |
 | S3 | Defender 排除 `resources` | ⬜ 待办 | 22 GB 权重加载会被实时扫描拖慢 |
 | S4 | HF / pip / torch 缓存放 D: | ✅ 完成 | 见 §8 缓存重定向 |
@@ -287,7 +288,7 @@ venv 体积从 10.82 GB 增至 **11.1 GB**。
 `<12`。原因是 torchvision 0.24.1 带入 pillow 13；本项目不走图像处理路径，暂不影响。
 若改用标准 `pip install -e '.[rocm]'`，pip 会把 pillow 降到 11.x，torchvision 仍可用。
 
-**下一步**：P2 权重下载（22.5 GB），需先完成页面文件调整（S1）。
+**下一步**：重启使页面文件扩容生效，然后进入 P2 权重下载（22.5 GB）。
 
 ---
 
@@ -303,6 +304,18 @@ venv 体积从 10.82 GB 增至 **11.1 GB**。
 | 6 | `--capture` 产出全黑 PNG | 该分支只渲染不 `present()`，读的是未呈现的 swapchain 后缓冲 | 改用 `--benchmark`（逐帧 present）或系统级窗口截图 |
 | 7 | PowerShell 调用 exe 后退出码为空、文件"没生成" | WIN32 子系统程序用 `&` 调用不阻塞 | 统一用 `Start-Process -Wait` |
 | 8 | Windows 上 `source-manifest.json` 大量校验不匹配 | 全局 `core.autocrlf=true` 把 LF 转成 CRLF | 仓库级 `core.autocrlf=false` 并重新检出；校验恢复 773/780，剩余 7 条为真实的清单过期 |
+| 9 | 用 PowerShell 批量替换文档内容后中文全部变成乱码 | PowerShell 5.1 的 `Set-Content` 默认按 ANSI 写盘，UTF-8 内容被破坏 | `git checkout` 回滚后改用编辑工具逐处修改；此后所有文本改动都走编辑工具，并校验 `U+FFFD` 计数为 0 |
+| 10 | 页面文件只有 2.9 GB，加载 22 GB 权重时可能 OOM | `PagingFiles` 为 `E:\pagefile.sys 0 0`（系统托管），Windows 按内存比例给了小值 | 以管理员权限把注册表改为 `E:\pagefile.sys 32768 65536`（`set-pagefile.ps1`），重启生效 |
+
+**页面文件变更记录（S1）**
+
+| 项 | 值 |
+| --- | --- |
+| 变更前 | `E:\pagefile.sys 0 0`（系统托管，实占 2944 MB） |
+| 变更后 | `E:\pagefile.sys 32768 65536`（注册表已写入，待重启） |
+| 为什么放 E: | C: 与 D: 同属 Disk 0，E: 是 Disk 1；页面文件与模型权重分处不同物理盘，避免 I/O 争抢 |
+| 执行方式 | `Start-Process -Verb RunAs` 提权运行 `D:\work\matrix-game-artifacts\set-pagefile.ps1`，日志见同目录 `pagefile-change.log` |
+| 重启后验证 | `Get-CimInstance Win32_PageFileUsage` 的 `AllocatedBaseSize` 应为 32768 左右 |
 
 ---
 
@@ -363,7 +376,7 @@ pip 临时目录不设全局，按命令临时指定到 `D:\work\Matrix-Game\.tm
 
 ## 13. 待办
 
-1. **[人工]** S1 页面文件调整为 32 GB 以上（D:），重启。
+1. **[人工]** 重启，使页面文件扩容（`E:` 32–64 GB）生效；重启后用 `Win32_PageFileUsage` 复核。
 2. S2 电源计划、S3 Defender 排除。
 3. P2：下载单场景权重（22.5 GB）并校验，验收 G2。
 4. 把 `check_rocm.py` 收敛为仓库内 `scripts/check_rocm.py`（C7）。
