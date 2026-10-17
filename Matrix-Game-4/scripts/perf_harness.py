@@ -80,14 +80,31 @@ def bench_attention(torch, height_width, window=21, dtype=None):
     return dict(tokens=tokens, keys=keys, attention_ms=round(milliseconds, 3))
 
 
-def run_config(torch, components, args, size, steps, runtime, guard, out_dir, frames, clip):
+def looks_degenerate(frame):
+    """Flag a sample that is indistinguishable from noise.
+
+    Switching the attention window between configurations in one process has been
+    observed to leave the model emitting noise for one configuration, and a
+    rendered frame that is merely wrong does not raise anywhere. Noise has a much
+    higher share of energy at the Nyquist frequency than a rendered scene, so a
+    coarse high-frequency ratio separates the two well enough to warn.
+    """
+    import numpy as np
+    frame = np.asarray(frame)
+    grey = frame.astype(np.float32) if frame.ndim == 2 else frame[..., :3].astype(np.float32).mean(axis=2)
+    dx = np.abs(np.diff(grey, axis=1)).mean()
+    # Neighbouring pixels in a real frame are strongly correlated; in noise they are not.
+    return float(dx) > 40.0
+
+
+def run_config(torch, components, args, size, steps, runtime, guard, out_dir, frames, clip, window=21):
     from PIL import Image
     from matrix_game.inference.preprocessing import crop_and_resize, frames_to_tensor, tensor_to_uint8
     from matrix_game.inference.runtime import install_runtime
     from matrix_game.inference.stream import CastleStream, encode_sink_image
 
     height, width = size
-    label = f"{height}x{width}_{len(steps)}step_{runtime}"
+    label = f"{height}x{width}_{len(steps)}step_{runtime}" + (f"_w{window}" if window != 21 else "")
     guard.check("before " + label)
 
     sink = components.sink_latent if tuple(size) == (480, 864) else None
@@ -103,7 +120,7 @@ def run_config(torch, components, args, size, steps, runtime, guard, out_dir, fr
                           seed=0, vae_backend=args.vae_backend, steps=steps,
                           first_steps=steps, profile=True, sink_latent=sink,
                           sink_mode=args.sink_mode, sink_rope_mode=args.sink_rope_mode,
-                          size=size)
+                          size=size, window=window)
     torch.cuda.reset_peak_memory_stats()
     timings = {"encode": [], "denoise": [], "decode": []}
     written = index = 0
@@ -130,6 +147,9 @@ def run_config(torch, components, args, size, steps, runtime, guard, out_dir, fr
         if sample is not None:
             out_dir.mkdir(parents=True, exist_ok=True)
             Image.fromarray(sample).save(out_dir / f"{label}.png")
+            degenerate = looks_degenerate(sample)
+            if degenerate:
+                print(f"    WARNING: {label} sample looks like noise - do not trust this row", flush=True)
     finally:
         stream.close()
         del stream
@@ -146,7 +166,8 @@ def run_config(torch, components, args, size, steps, runtime, guard, out_dir, fr
 
     stages = {name: summary(values) for name, values in timings.items() if values}
     chunk_ms = sum(stage.get("mean", 0) for stage in stages.values())
-    return dict(label=label, size=list(size), steps=list(steps), runtime=runtime, frames=written,
+    return dict(label=label, size=list(size), steps=list(steps), runtime=runtime,
+                window=window, frames=written,
                 seconds=round(wall, 2), fps=round(written / wall, 2) if wall else 0,
                 chunk_ms=round(chunk_ms, 2), stages=stages,
                 peak_vram_gb=round(torch.cuda.max_memory_allocated() / 1024 ** 3, 2),
@@ -165,6 +186,8 @@ def main():
     parser.add_argument("--max-commit-gb", type=float, default=40.0)
     parser.add_argument("--configs", default="full1,kern1,graph1",
                         help="full1/native, kern1/kernels, graph1/ring-graph, half1=288x512, full2=two steps")
+    parser.add_argument("--windows", default="21",
+                        help="Comma-separated KV attention windows in latent frames (default 21, the released setting)")
     args = parser.parse_args()
     resolve_model_arguments(args)
 
@@ -219,23 +242,27 @@ def main():
     print(f"loaded in {time.perf_counter() - started:.0f}s", flush=True)
 
     results = []
+    windows = [int(w) for w in str(args.windows).split(",") if w.strip()]
     try:
         for name in chosen:
-            size, steps, runtime = matrix[name]
-            print(f"\n--- {name}: {size[0]}x{size[1]}, {len(steps)} step(s), {runtime} ---", flush=True)
-            try:
-                entry = run_config(torch, components, args, size, steps, runtime, guard,
-                                   args.out, args.frames, clip)
-            except SystemExit:
-                raise
-            except Exception as exc:  # noqa: BLE001 - one bad runtime must not end the matrix
-                entry = dict(label=name, size=list(size), steps=list(steps), runtime=runtime,
-                             error=f"{type(exc).__name__}: {exc}")
-                print(f"    FAILED: {entry['error']}", flush=True)
-                torch.cuda.empty_cache()
-            entry["name"] = name
-            results.append(entry)
-            print(json.dumps(entry), flush=True)
+            for window in windows:
+                size, steps, runtime = matrix[name]
+                print(f"\n--- {name} window={window}: {size[0]}x{size[1]}, {len(steps)} step(s), {runtime} ---",
+                      flush=True)
+                try:
+                    entry = run_config(torch, components, args, size, steps, runtime, guard,
+                                       args.out, args.frames, clip, window)
+                except SystemExit:
+                    raise
+                except Exception as exc:  # noqa: BLE001 - one bad runtime must not end the matrix
+                    entry = dict(label=f"{name}_w{window}", size=list(size), steps=list(steps),
+                                 runtime=runtime, window=window,
+                                 error=f"{type(exc).__name__}: {exc}")
+                    print(f"    FAILED: {entry['error']}", flush=True)
+                    torch.cuda.empty_cache()
+                entry["name"] = name
+                results.append(entry)
+                print(json.dumps(entry), flush=True)
     finally:
         args.out.mkdir(parents=True, exist_ok=True)
         report = dict(attention_backends=backends, attention_bench=attention,

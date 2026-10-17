@@ -88,7 +88,7 @@ def main(argv=None):
                               seed=args.seed, vae_backend=args.vae_backend, steps=args.steps,
                               first_steps=args.first_steps, sink_latent=components.sink_latent,
                               sink_mode=args.sink_mode, sink_rope_mode=args.sink_rope_mode,
-                              size=args.size)
+                              size=args.size, window=args.window)
         if args.captions:
             caption_file = args.captions.open()
         current_prompt = args.prompt

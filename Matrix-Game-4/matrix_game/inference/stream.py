@@ -57,7 +57,8 @@ class CastleStream:
 
     def __init__(self, generator, vae, prompt_embeds, *, seed=0, max_latents=8192,
                  vae_backend="wan", steps=(1000, 500), first_steps=(1000, 750, 500, 250), profile=False,
-                 sink_latent=None, sink_mode="kv_only", sink_rope_mode="fixed", size=(480, 864)):
+                 sink_latent=None, sink_mode="kv_only", sink_rope_mode="fixed", size=(480, 864),
+                 window=21):
         from matrix_game.inference.rollout import CausalV2VRollout, set_attention_window, warp_steps
         from matrix_game.inference.wrappers import frame_seq_length_of
 
@@ -90,6 +91,12 @@ class CastleStream:
         self.max_latents = max_latents
         if max_latents < 1:
             raise ValueError("max_latents must be positive")
+        # The attention window is a runtime choice, not a weight: training used 81-frame
+        # windows, inference keeps 21. It has to be set on the blocks, given to the
+        # rollout, and reflected in the cache width - the runtime asserts all three
+        # agree - so it is threaded through here instead of being hard-coded.
+        if window < 2:
+            raise ValueError("Attention window must cover at least two latent frames")
         self.initial_rng = torch.Generator("cpu").manual_seed(seed + 1)
         self.racing_rng = torch.Generator("cpu").manual_seed(seed)
         self.renoise_rng = torch.Generator(self.device).manual_seed(seed)
@@ -97,13 +104,13 @@ class CastleStream:
         self.rollout = CausalV2VRollout(
             generator, scheduler, warp_steps(scheduler, list(steps)),
             warp_steps(scheduler, list(first_steps)),
-            local_attn_size=21, sink_size=1, sink_rope_mode=sink_rope_mode,
+            local_attn_size=window, sink_size=1, sink_rope_mode=sink_rope_mode,
             memory_mode="none", rope_max_len=max(8192, max_latents + self.sink_offset),
         )
-        set_attention_window(generator, 21, 1)
+        set_attention_window(generator, window, 1)
         self.rollout._prepare_rope()
         self.fsl = frame_seq_length_of(generator, *self.latent_size)
-        self.kv, self.xc = self.rollout._caches(1, 21, self.fsl, self.dtype, self.device)
+        self.kv, self.xc = self.rollout._caches(1, window, self.fsl, self.dtype, self.device)
         for cache in self.kv:
             cache["k_sink_raw"] = torch.zeros_like(cache["k"][:, :self.fsl])
         self.encoder_features, self.decoder = [], None

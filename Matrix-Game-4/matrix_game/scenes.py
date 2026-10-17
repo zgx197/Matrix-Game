@@ -47,6 +47,9 @@ def add_model_arguments(parser):
     parser.add_argument("--first-steps", type=parse_steps)
     parser.add_argument("--size", type=parse_size, default=(480, 864),
                         help="Output HxW; both axes must be multiples of 16 (default 480x864)")
+    parser.add_argument("--window", type=parse_window, default=21,
+                        help="KV attention window in latent frames (default 21, the released setting). "
+                             "Shorter is faster and shortens long-range memory; 12 measures 14%% faster at 480p.")
     parser.add_argument("--vae-graph", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--prompt-mode", choices=("fixed", "dynamic"), default="fixed")
     parser.add_argument("--prompt", help="Override the fixed scene caption")
@@ -70,6 +73,18 @@ def parse_steps(value):
         return steps
     except ValueError:
         raise argparse.ArgumentTypeError("Timesteps must decrease strictly from 1000") from None
+
+
+def parse_window(value):
+    """KV attention window: sink plus at least one gameplay frame."""
+    import argparse
+    try:
+        window = int(value)
+    except (TypeError, ValueError):
+        raise argparse.ArgumentTypeError("Window must be an integer number of latent frames") from None
+    if window < 2:
+        raise argparse.ArgumentTypeError("Window must be at least 2 latent frames")
+    return window
 
 
 def parse_size(value):

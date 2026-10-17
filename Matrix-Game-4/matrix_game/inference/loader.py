@@ -136,13 +136,15 @@ class ModelComponents:
                             steps=self.args.steps, first_steps=self.args.first_steps,
                             sink_latent=self.sink_latent, sink_mode=self.args.sink_mode,
                             sink_rope_mode=self.args.sink_rope_mode,
-                            size=getattr(self.args, "size", (480, 864)), **kwargs)
+                            size=getattr(self.args, "size", (480, 864)),
+                            window=getattr(self.args, "window", 21), **kwargs)
 
     def config(self):
         return dict(scene=self.args.scene, scene_name=SCENES[self.args.scene]["name"],
                     checkpoint=self.args.checkpoint.name, ckpt_keys=["generator_ema"],
                     vae_backend=self.args.vae_backend, steps=list(self.args.steps),
                     size=list(getattr(self.args, "size", (480, 864))),
+                    window=getattr(self.args, "window", 21),
                     first_steps=list(self.args.first_steps), sink_rope_mode=self.args.sink_rope_mode,
                     sink_mode=self.args.sink_mode, sink_encoder=self.args.vae_backend,
                     sink_source="image" if self.args.sink_image is not None else "generated_first_frame",
