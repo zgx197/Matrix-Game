@@ -12,7 +12,7 @@
 | --- | --- | --- |
 | 阶段 0 | Windows 引擎（游戏）构建与录制 | ✅ 完成，已提交并推送 |
 | P0 | ROCm + PyTorch 环境、数值与算力验证 | ✅ 完成，门 G0 通过 |
-| P1 | 其余依赖安装、绕开 torch 版本锁 | ⬜ 未开始 |
+| P1 | 其余依赖安装、绕开 torch 版本锁 | ✅ 完成，门 G1 通过 |
 | P2 | 单场景权重下载与校验（22.5 GB） | ⬜ 未开始 |
 | P3 | 首次离线渲染 | ⬜ 未开始 |
 | P4 | 性能基线与优化 | ⬜ 未开始 |
@@ -113,7 +113,7 @@
 | 门 | 条件 | 状态 |
 | --- | --- | --- |
 | G0 | 设备可见 + BF16 可用 | ✅ 通过 |
-| G1 | 依赖导入无冲突 | ⬜ |
+| G1 | 依赖导入无冲突 | ✅ 通过 |
 | G2 | 权重 SHA256 全通过 | ⬜ |
 | G3 | 48 帧渲染成功 | ⬜ |
 | G4 | 形成性能基线 | ⬜ |
@@ -127,9 +127,9 @@
 
 | ID | 级别 | 文件 | 改动 | 状态 |
 | --- | --- | --- | --- | --- |
-| C1 | 必须 | `pyproject.toml` | 新增 `rocm` extra（不锁 torch） | ⬜ |
+| C1 | 必须 | `pyproject.toml` | 新增 `rocm` extra（不锁 torch） | ✅ `4abdd59` |
 | C2 | 必须 | `inference/loader.py` | prompt 编码提前到 DiT 构建之前 | ⬜ |
-| C3 | 必须 | `inference/loader.py` | 设备/精度可配置（默认仍 cuda/bf16） | ⬜ |
+| C3 | 必须 | `inference/loader.py`、`scenes.py` | 设备/精度可配置（默认仍 cuda/bf16） | ✅ `9f76a2f` |
 | C4 | 建议 | `inference/text.py` | CUDA Graph 能力探测 + 自动回退 | ⬜ |
 | C5 | 建议 | `scenes.py` / CLI | 增加 `--preset rocm` | ⬜ |
 | C6 | 可选 | `docs/installation.md` | 补 Windows + ROCm 安装说明 | ⬜ |
@@ -235,6 +235,60 @@ DiT 真实形状（405 token × 3072 dim × 14336 FFN）实测 **57.8 TFLOPS**�
 
 **结论**：计算不是瓶颈。按 2 步 + Wan VAE 的保守估算仍有 10–25 FPS 空间（待 P4 实测）。
 
+### 阶段 4 · P1 依赖与代码改动（已完成）
+
+**问题**：`inference` extra 锁死 `torch==2.12.0` + `torchvision==0.27.0`，而 ROCm 的
+torch 由 AMD 发布、不在 PyPI 上，直接安装会尝试拉 CUDA 版并覆盖现有环境。
+
+**做法**
+
+1. **C1**：新增 `rocm` extra，与 `inference` 的内容一致但**故意不含 torch/torchvision**，
+   因此安装它永远不会替换已装的 ROCm 构建（提交 `4abdd59`）。
+2. 用 `--no-deps` 方式安装依赖与仓库本体，避免解析器回溯 torch 版本。
+3. **C3**：`--device` / `--dtype` 可配置，并在参数解析阶段拒绝不适用的组合（提交 `9f76a2f`）。
+
+**安装结果**（全部位于 `D:\work\Matrix-Game\.venv-rocm`）
+
+| 包 | 版本 |
+| --- | --- |
+| torch / torchvision / torchaudio | `2.9.1+rocmsdk20260116` / `0.24.1` / `2.9.1` |
+| diffusers | `0.39.0` |
+| transformers | `5.17.0` |
+| accelerate | `1.15.0` |
+| safetensors | `0.8.0` |
+| tokenizers | `0.23.3` |
+| huggingface_hub | `1.33.0` |
+| numpy | `2.5.4` |
+| pillow | `13.0.0` |
+| einops / ftfy / regex / sentencepiece / tqdm / imageio-ffmpeg | `0.8.2` / `6.3.1` / `2026.9.29` / `0.2.2` / `4.70.1` / `0.6.0` |
+| matrix-game-4.0（可编辑安装） | `4.0.0rc1` |
+
+venv 体积从 10.82 GB 增至 **11.1 GB**。
+
+**验收 → 门 G1 PASS**
+
+| 检查 | 结果 |
+| --- | --- |
+| `import matrix_game, diffusers, transformers, accelerate, safetensors, einops, ftfy, sentencepiece, imageio_ffmpeg` | 全部通过 |
+| `torch.__version__` 是否被改动 | 未变，仍为 `2.9.1+rocmsdk20260116` |
+| GPU 可见性 | `True`，`AMD Radeon RX 7900 XTX` |
+| 控制台入口 `matrix-game.exe` | 已生成 |
+| CLI 新参数 | `--device`、`--dtype {bf16,fp16,fp32}` 出现在帮助中 |
+
+**组合校验（三条规则实测）**
+
+| 命令 | 预期 | 实测 |
+| --- | --- | --- |
+| `--dtype fp16 --dit-runtime ring-fused` | 拒绝 | ✅ `The ring-fused runtime requires --dtype bf16; use --dit-runtime native for fp16 or fp32` |
+| `--device cpu --dit-runtime ring-fused` | 拒绝 | ✅ `The ring-fused runtime requires --device cuda; use --dit-runtime native on other devices` |
+| `--dtype fp16 --dit-runtime native` | 通过校验 | ✅ 继续执行到"缺少模型资源"（属预期，权重尚未下载） |
+
+**已知偏差**：本次用 `--no-deps` 安装，`pillow` 保留 13.0.0，而 `pyproject.toml` 声明
+`<12`。原因是 torchvision 0.24.1 带入 pillow 13；本项目不走图像处理路径，暂不影响。
+若改用标准 `pip install -e '.[rocm]'`，pip 会把 pillow 降到 11.x，torchvision 仍可用。
+
+**下一步**：P2 权重下载（22.5 GB），需先完成页面文件调整（S1）。
+
 ---
 
 ## 9. 问题与解决记录
@@ -288,6 +342,9 @@ DiT 真实形状（405 token × 3072 dim × 14336 FFN）实测 **57.8 TFLOPS**�
 | torch / torchvision / torchaudio | `2.9.1+rocmsdk20260116` / `0.24.1` / `2.9.1` |
 | ROCm SDK | `rocm-sdk-core / devel / libraries-custom` 均 `7.2.0.dev0`，`rocm 7.2.0.dev0` |
 | 关键传递依赖 | numpy 2.5.4、pillow 13.0.0、sympy 1.14.0、networkx 3.7、filelock 4.2.0、fsspec 2026.9.0、jinja2 3.1.6 |
+| 推理依赖（P1） | diffusers 0.39.0、transformers 5.17.0、accelerate 1.15.0、safetensors 0.8.0、tokenizers 0.23.3、huggingface_hub 1.33.0；完整列表见 §8 阶段 4 |
+| 仓库本体 | `matrix-game-4.0 4.0.0rc1`，可编辑安装（`pip install -e . --no-deps`） |
+| venv 体积 | 11.1 GB（P0 时为 10.82 GB） |
 | 自检脚本 | `D:\work\matrix-game-artifacts\check_rocm.py` |
 
 **缓存重定向（用户级环境变量，已生效）**
@@ -308,8 +365,9 @@ pip 临时目录不设全局，按命令临时指定到 `D:\work\Matrix-Game\.tm
 
 1. **[人工]** S1 页面文件调整为 32 GB 以上（D:），重启。
 2. S2 电源计划、S3 Defender 排除。
-3. P1：实施 C1/C3，安装其余依赖，验收 G1。
+3. P2：下载单场景权重（22.5 GB）并校验，验收 G2。
 4. 把 `check_rocm.py` 收敛为仓库内 `scripts/check_rocm.py`（C7）。
+5. P3 时按需实施 C2（T5/DiT 加载顺序）与 C5（`--preset rocm`）。
 
 ---
 
@@ -335,6 +393,26 @@ $py = ".venv-rocm\Scripts\python.exe"
 
 # 自检
 & $py D:\work\matrix-game-artifacts\check_rocm.py
+```
+
+## 14b. 附录 A2：P1 依赖安装命令
+
+```powershell
+cd D:\work\Matrix-Game
+$env:TMP = "D:\work\Matrix-Game\.tmp"; $env:TEMP = $env:TMP   # 不污染 C: 临时目录
+$py = ".venv-rocm\Scripts\python.exe"
+
+# 推理依赖（不带 --deps 的 torch；版本与仓库 inference extra 一致）
+& $py -m pip install --no-cache-dir --progress-bar off `
+  "diffusers==0.39.0" "transformers==5.17.0" "accelerate==1.15.0" "safetensors==0.8.0" `
+  "einops>=0.8" "ftfy>=6" "regex" "sentencepiece>=0.2" "tqdm>=4.66" "imageio-ffmpeg>=0.5"
+
+# 仓库本体：可编辑、不解析依赖，避免回溯到 PyPI 的 CUDA 版 torch
+cd Matrix-Game-4
+& $py -m pip install -e . --no-deps --no-build-isolation --progress-bar off
+
+# 验收 G1
+& $py -c "import torch, matrix_game, diffusers, transformers; print(torch.__version__, diffusers.__version__, transformers.__version__)"
 ```
 
 ## 15. 附录 B：阶段 0 引擎命令
