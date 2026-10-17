@@ -16,6 +16,17 @@ endif()
 if(CMAKE_VERSION VERSION_GREATER_EQUAL 4.0)
   set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 endif()
+# Multi-config generators (Visual Studio, Xcode) append the configuration name
+# to RUNTIME_OUTPUT_DIRECTORY, which would put the executable in bin/Release and
+# break the asset root both entries derive from the executable path. Pin every
+# configuration to bin/ so bin/<tool> is the same location on every generator.
+function(set_output_directory target)
+  set_target_properties(${target} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
+  foreach(configuration DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
+    set_target_properties(${target} PROPERTIES
+      RUNTIME_OUTPUT_DIRECTORY_${configuration} "${CMAKE_SOURCE_DIR}/bin")
+  endforeach()
+endfunction()
 add_subdirectory(third_party/JoltPhysics/Build)
 add_subdirectory(third_party/recastnavigation)
 if(WIN32)
@@ -87,7 +98,7 @@ else()
   target_compile_options(MedievalCastleBBoxMap PRIVATE -Wall -Wextra -Wno-unused-parameter)
 endif()
 target_link_libraries(MedievalCastleBBoxMap PRIVATE Jolt Recast Detour)
-set_target_properties(MedievalCastleBBoxMap PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
+set_output_directory(MedievalCastleBBoxMap)
 
 if(NOT WIN32)
   add_executable(CastleReferenceServer src/ReferenceServerMain.cpp src/RendererLinux.cpp src/HeadlessGL.cpp
@@ -103,5 +114,5 @@ if(NOT WIN32)
       target_link_libraries(CastleReferenceServer PRIVATE ${CASTLE_EGL_LIBRARY})
     endif()
   endif()
-  set_target_properties(CastleReferenceServer PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
+  set_output_directory(CastleReferenceServer)
 endif()
