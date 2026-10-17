@@ -1,28 +1,35 @@
 """Play the game while a neural-rendered preview follows along.
 
-The Windows game is a normal desktop window, so this bridge captures its client
-area, pushes frames through the same CastleStream the offline renderer uses, and
-shows the result in a second window. Gameplay stays on the low-poly window: the
-network renders at single-digit FPS, the engine runs three orders of magnitude
-faster, so this is a live preview rather than a playable rendered frame rate.
+The Windows entry is an ordinary desktop window, so this bridge captures its
+client area, pushes frames through the same CastleStream the offline renderer
+uses, and shows the result in a second window placed beside it.
+
+Gameplay stays on the low-poly window: the engine runs at hundreds of FPS and
+the model at a dozen, so the rendered view trails the input. Controls are
+handed to the player from the first frame (--manual), and the preview always
+consumes the newest frames instead of queuing, which keeps the lag roughly
+constant instead of growing.
 
 Both windows are forced always-on-top and placed side by side so neither can
-cover the other - occlusion would feed the captured region back into the model.
+occlude the captured region - occlusion would feed the preview back into the
+model.
 
 Example:
     python scripts/play_rendered.py --scene ancient-egypt --resources resources \
-        --preset realtime --dit-runtime native --no-vae-graph --t5-runtime native
+        --preset rocm --size 352x640 --capture-fps 12
 """
 import argparse
 import ctypes
 import time
+from collections import deque
 from ctypes import wintypes
 from pathlib import Path
 from queue import Empty, Queue
 import threading
 
 import numpy as np
-from PIL import Image, ImageGrab, ImageTk
+from PIL import Image, ImageTk
+import mss
 
 HWND_TOPMOST = -1
 SWP_NOSIZE = 0x0001
@@ -72,7 +79,7 @@ def window_rect(hwnd):
 def find_window(title_part):
     """Top-level window whose title contains ``title_part``."""
     found = []
-    proc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    proc = WNDENUMPROC
 
     def callback(hwnd, _):
         if not user32.IsWindowVisible(hwnd):
@@ -92,97 +99,104 @@ def find_window(title_part):
 
 def place_topmost(hwnd, x, y, width, height):
     """Move and resize the client area to (x, y) with the given size, on top."""
-    present = user32.SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_SHOWWINDOW)
+    user32.SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_SHOWWINDOW)
     rect = wintypes.RECT()
     user32.GetWindowRect(hwnd, ctypes.byref(rect))
-    frame_w = rect.right - rect.left
-    frame_h = rect.bottom - rect.top
     client_x, client_y, client_w, client_h = window_rect(hwnd)
     # Window frame is larger than the client area; offset so the client lands on x,y.
     border_x = client_x - rect.left
     border_y = client_y - rect.top
     user32.SetWindowPos(hwnd, HWND_TOPMOST, x - border_x, y - border_y,
-                        width + (frame_w - client_w), height + (frame_h - client_h),
-                        SWP_SHOWWINDOW)
-    return present
+                        width + (rect.right - rect.left - client_w),
+                        height + (rect.bottom - rect.top - client_h), SWP_SHOWWINDOW)
 
 
-class GameBridge:
-    def __init__(self, stream, bbox, capture_fps, on_frames, counts=(1, 4)):
+class Bridge:
+    """Capture the game window and feed a CastleStream with the newest frames."""
+
+    def __init__(self, stream, bbox, capture_fps, on_frames):
         self.stream = stream
         self.bbox = bbox
         self.interval = 1.0 / capture_fps
         self.on_frames = on_frames
-        self.counts = counts
-        self.frames = []
+        self.frames = deque(maxlen=16)
         self.lock = threading.Lock()
         self.stop = threading.Event()
         self.written = 0
+        self.chunks = 0
         self.errors = []
-        self.capture_fps_measured = 0.0
-        self.render_fps_measured = 0.0
+        self.capture_fps = 0.0
+        self.render_fps = 0.0
+        self.latency_ms = 0.0
+        self.threads = []
 
-    def _capture(self):
+    def _capture_loop(self):
+        # Pillow's grab snapshots the whole 4000x2560 desktop before cropping, so
+        # its cost is independent of the region (~275 ms here). mss captures only
+        # the requested rectangle (~39 ms at 1280x720).
         grabbed = 0
         started = time.perf_counter()
-        while not self.stop.is_set():
-            begin = time.perf_counter()
-            try:
-                image = ImageGrab.grab(bbox=self.bbox, all_screens=True)
-            except Exception as exc:  # noqa: BLE001 - reported through errors
-                self.errors.append(f"capture: {exc}")
-                return
-            with self.lock:
-                self.frames.append(np.asarray(image.convert("RGB")))
-                if len(self.frames) > 12:
-                    del self.frames[:-12]
-            grabbed += 1
-            elapsed = time.perf_counter() - started
-            if elapsed > 1:
-                self.capture_fps_measured = grabbed / elapsed
-            time.sleep(max(0.0, self.interval - (time.perf_counter() - begin)))
+        monitor = {"left": self.bbox[0], "top": self.bbox[1],
+                   "width": self.bbox[2] - self.bbox[0], "height": self.bbox[3] - self.bbox[1]}
+        with mss.mss() as sct:
+            while not self.stop.is_set():
+                begin = time.perf_counter()
+                try:
+                    shot = sct.grab(monitor)
+                    frame = np.asarray(shot)[:, :, :3].copy()
+                except Exception as exc:  # noqa: BLE001
+                    self.errors.append(f"capture: {exc}")
+                    return
+                with self.lock:
+                    self.frames.append((begin, frame))
+                grabbed += 1
+                elapsed = time.perf_counter() - started
+                if elapsed > 1:
+                    self.capture_fps = grabbed / elapsed
+                time.sleep(max(0.0, self.interval - (time.perf_counter() - begin)))
 
-    def _render(self):
+    def _render_loop(self):
         from matrix_game.inference.preprocessing import crop_and_resize, frames_to_tensor, tensor_to_uint8
-        count = self.counts[0]
+        height, width = self.stream.size
+        count = 1
         started = time.perf_counter()
-        chunks = 0
         while not self.stop.is_set():
             with self.lock:
                 if len(self.frames) < count:
-                    available = False
+                    batch = None
                 else:
-                    batch = self.frames[-count:]
+                    batch = list(self.frames)[-count:]
                     self.frames.clear()
-                    available = True
-            if not available:
-                time.sleep(0.02)
+            if batch is None:
+                time.sleep(0.01)
                 continue
+            taken_at = batch[-1][0]
             try:
-                images = [crop_and_resize(Image.fromarray(frame), 480, 864) for frame in batch]
+                images = [crop_and_resize(Image.fromarray(frame), height, width) for _, frame in batch]
                 result = self.stream.push(frames_to_tensor(images), frame_start=self.written)
                 rgb = tensor_to_uint8(result.pixels)
-            except Exception as exc:  # noqa: BLE001 - surface it in the UI
+            except Exception as exc:  # noqa: BLE001 - surface it in the window
                 self.errors.append(f"render: {type(exc).__name__}: {exc}")
                 self.stop.set()
                 return
             self.written += len(batch)
-            chunks += 1
+            self.chunks += 1
+            self.latency_ms = (time.perf_counter() - taken_at) * 1000
             elapsed = time.perf_counter() - started
             if elapsed > 1:
-                self.render_fps_measured = self.written / elapsed
+                self.render_fps = self.written / elapsed
             self.on_frames(rgb)
-            count = self.counts[1]
+            count = 4
 
     def start(self):
-        self.threads = [threading.Thread(target=self._capture, name="capture", daemon=True),
-                        threading.Thread(target=self._render, name="render", daemon=True)]
+        self.threads = [threading.Thread(target=self._capture_loop, name="capture", daemon=True),
+                        threading.Thread(target=self._render_loop, name="render", daemon=True)]
         for thread in self.threads:
             thread.start()
 
     def close(self):
         self.stop.set()
-        for thread in getattr(self, "threads", []):
+        for thread in self.threads:
             thread.join(timeout=2)
 
 
@@ -190,44 +204,41 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     from matrix_game.scenes import add_model_arguments, resolve_model_arguments
     add_model_arguments(parser)
-    parser.set_defaults(preset="realtime")
+    parser.set_defaults(preset="rocm")
     parser.add_argument("--game-exe", type=Path,
                         default=Path(__file__).resolve().parents[1] / "game/bin/MedievalCastleBBoxMap.exe")
-    parser.add_argument("--no-launch", action="store_true", help="Use an already running game window")
+    parser.add_argument("--no-launch", action="store_true", help="Attach to a running game window")
     parser.add_argument("--window-title", default="Medieval Castle BBox")
-    parser.add_argument("--capture-fps", type=float, default=12.0)
-    parser.add_argument("--no-vsync", action="store_true", help="Leave the engine uncapped (starves the model)")
+    parser.add_argument("--capture-fps", type=float, default=30.0)
     parser.add_argument("--game-size", default="1280x720")
-    parser.add_argument("--preview-at", default="1300,80", help="Preview window position")
     args = parser.parse_args()
 
     resolve_model_arguments(args)
-    width, height = (int(v) for v in args.game_size.lower().split("x"))
-    preview_x, preview_y = (int(v) for v in args.preview_at.split(","))
+    game_width, game_height = (int(v) for v in args.game_size.lower().split("x"))
+    out_height, out_width = args.size
 
-    # Load the model before the game exists: T5 alone needs ~11 GB, and starting
-    # the engine first costs a few GB of commit charge right when it matters.
     import torch
     from matrix_game.inference.loader import ModelComponents
     from matrix_game.inference.stream import CastleStream
 
-    print("loading model (this is the slow part)...", flush=True)
+    print("loading model (about two minutes)...", flush=True)
     components = ModelComponents(args)
-    components.load()
+    try:
+        components.load()
+    except Exception as exc:  # noqa: BLE001 - the ROCm stack can fail at load
+        raise SystemExit(f"model load failed: {type(exc).__name__}: {exc}")
     stream = CastleStream(components.gen, components.vae, components.prompt,
                           seed=0, vae_backend=args.vae_backend, steps=args.steps,
                           first_steps=args.first_steps, sink_latent=components.sink_latent,
-                          sink_mode=args.sink_mode, sink_rope_mode=args.sink_rope_mode)
+                          sink_mode=args.sink_mode, sink_rope_mode=args.sink_rope_mode,
+                          size=args.size)
+    print(f"model ready ({torch.cuda.get_device_name(0)}), launching game", flush=True)
 
     game = None
     if not args.no_launch:
         import subprocess
-        command = [str(args.game_exe), "--scene", args.scene, "--no-hud",
-                   "--width", str(width), "--height", str(height)]
-        # Uncapped, the engine renders thousands of frames per second and starves
-        # the model on the same GPU; vsync costs nothing visible and keeps both alive.
-        if not args.no_vsync:
-            command.append("--vsync")
+        command = [str(args.game_exe), "--scene", args.scene, "--no-hud", "--manual", "--vsync",
+                   "--width", str(game_width), "--height", str(game_height)]
         print("launching:", " ".join(command), flush=True)
         game = subprocess.Popen(command, cwd=str(Path(__file__).resolve().parents[1]))
         deadline = time.time() + 30
@@ -246,7 +257,7 @@ def main():
             raise SystemExit("no game window found; start the game first")
         print("attached to:", title, flush=True)
 
-    place_topmost(hwnd, 0, 0, width, height)
+    place_topmost(hwnd, 0, 0, game_width, game_height)
     time.sleep(0.5)
     x, y, client_w, client_h = window_rect(hwnd)
     bbox = (x, y, x + client_w, y + client_h)
@@ -255,11 +266,13 @@ def main():
     import tkinter as tk
     root = tk.Tk()
     root.title("Matrix-Game 4.0 - rendered preview")
-    label = tk.Label(root, text="waiting for frames...", width=864, height=480, bg="black", fg="white")
+    label = tk.Label(root, text="waiting for frames...", width=out_width, height=out_height,
+                     bg="black", fg="white")
     label.pack()
-    status = tk.Label(root, text="", anchor="w", fg="gray20")
+    status = tk.Label(root, text="", anchor="w", fg="#333333")
     status.pack(fill="x")
-    root.geometry(f"864x510+{preview_x}+{preview_y}")
+    # Sit to the right of the game window so neither occludes the other.
+    root.geometry(f"{out_width}x{out_height + 28}+{client_w + 24}+{max(0, y)}")
     root.attributes("-topmost", True)
 
     display = Queue(maxsize=2)
@@ -271,7 +284,7 @@ def main():
         except Exception:  # noqa: BLE001 - drop when the UI is behind
             pass
 
-    bridge = GameBridge(stream, bbox, args.capture_fps, on_frames)
+    bridge = Bridge(stream, bbox, args.capture_fps, on_frames)
     bridge.start()
 
     def tick():
@@ -280,17 +293,18 @@ def main():
         except Empty:
             rgb = None
         if rgb is not None:
-            image = Image.fromarray(rgb[0] if rgb.ndim == 4 else rgb)
-            photo = ImageTk.PhotoImage(image)
+            frame = rgb[-1] if rgb.ndim == 4 else rgb
+            photo = ImageTk.PhotoImage(Image.fromarray(frame))
             photos.append(photo)
             del photos[:-2]
             label.configure(image=photo, text="")
         if bridge.errors:
-            status.configure(text="ERROR: " + bridge.errors[0])
+            status.configure(text="ERROR: " + bridge.errors[0][:80])
         else:
-            status.configure(text=f"captured {bridge.capture_fps_measured:4.1f} fps | "
-                                  f"rendered {bridge.render_fps_measured:4.1f} fps | "
-                                  f"frames {bridge.written} | play in the LEFT window")
+            status.configure(
+                text=f"capture {bridge.capture_fps:4.1f} fps | render {bridge.render_fps:4.1f} fps | "
+                     f"lag {bridge.latency_ms:4.0f} ms | chunks {bridge.chunks} | "
+                     f"WASD move, Space jump, Shift dash, mouse look")
         if not bridge.stop.is_set():
             root.after(20, tick)
         else:
