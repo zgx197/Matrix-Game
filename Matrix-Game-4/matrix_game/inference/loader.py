@@ -6,6 +6,27 @@ from matrix_game.scenes import SCENES
 
 LOG = logging.getLogger(__name__)
 
+# Our dtype names, mapped to attributes on the torch module.
+DTYPES = {"bf16": "bfloat16", "fp16": "float16", "fp32": "float32"}
+
+
+def resolve_device_dtype(torch, args):
+    """Device and dtype selected on the command line, validated against this build.
+
+    Returns (device, dtype, dtype_name) so the loader can pass the same name to
+    ``build_dit``. ROCm builds report their GPU as ``cuda`` as well, so nothing
+    here is NVIDIA-specific.
+    """
+    name = getattr(args, "dtype", "bf16")
+    if name not in DTYPES:
+        raise ValueError(f"Unsupported dtype {name!r}; expected one of {sorted(DTYPES)}")
+    dtype = getattr(torch, DTYPES[name])
+    device = torch.device(getattr(args, "device", "cuda"))
+    if device.type == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("--device cuda was requested but this torch build reports no GPU; "
+                           "install a ROCm/CUDA build or pass --device cpu")
+    return device, dtype, DTYPES[name]
+
 
 class ModelComponents:
     def __init__(self, args):
@@ -23,7 +44,7 @@ class ModelComponents:
         torch.backends.cuda.matmul.allow_tf32 = False
         torch.backends.cudnn.allow_tf32 = False
         self.attention_backend = "fa3" if FLASH_ATTN_3_AVAILABLE else ("fa2" if FLASH_ATTN_2_AVAILABLE else "sdpa")
-        device, dtype = torch.device("cuda"), torch.bfloat16
+        device, dtype, dtype_name = resolve_device_dtype(torch, self.args)
         if self.args.dit_runtime.startswith("rtx5080"):
             # encode the fixed prompt and free T5.
             self.prompt = self._encode_fixed_prompt(device, dtype)
@@ -39,7 +60,7 @@ class ModelComponents:
             self.gen = load_transformer(self.args.checkpoint, sage=self.args.dit_runtime == "rtx5090-sage")
         else:
             self.gen = build_dit(str(self.args.model_dir), str(self.args.checkpoint), is_causal=True,
-                                dtype="bfloat16", timestep_shift=5, ckpt_keys=("generator_ema",)).to(device).eval().requires_grad_(False)
+                                dtype=dtype_name, timestep_shift=5, ckpt_keys=("generator_ema",)).to(device).eval().requires_grad_(False)
             from matrix_game.inference.runtime import install_runtime
             if self.args.dit_runtime.startswith("ring"):
                 LOG.warning("Ring/fused runtime changes floating-point reduction order; use native for baseline comparisons")
@@ -120,6 +141,7 @@ class ModelComponents:
                     hq_first_frame=self.args.sink_mode == "first_frame" and self.args.sink_image is not None,
                     prompt_mode=self.args.prompt_mode, prompt_interval_chunks=self.args.prompt_interval_chunks,
                     t5_runtime=self.args.t5_runtime, dit_parallel="single", dit_runtime=self.args.dit_runtime,
+                    device=str(self.args.device), dtype=self.args.dtype,
                     attention_backend=self.attention_backend,
                     vae_graph=getattr(self.args, "vae_graph", False),
                     early_publish=getattr(self.args, "early_publish", False),

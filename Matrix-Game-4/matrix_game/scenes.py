@@ -25,6 +25,10 @@ def configure_scene(args):
 
 OPTIMIZED_RUNTIMES = ("rtx5090", "rtx5090-sage", "rtx5080", "rtx5080-sage", "rtx5070ti", "rtx5070ti-sage")
 FIXED_PROMPT_RUNTIMES = ("rtx5080", "rtx5080-sage", "rtx5070ti", "rtx5070ti-sage")
+# Our torch dtype names, mapped to the attribute on the torch module.
+DTYPES = {"bf16": "bfloat16", "fp16": "float16", "fp32": "float32"}
+# Runtimes that hard-code bf16 and a CUDA device in their kernels and graphs.
+BF16_ONLY_RUNTIMES = ("kernels", "cudagraph", "ring", "ring-graph", "ring-fused")
 
 
 def add_model_arguments(parser):
@@ -42,6 +46,10 @@ def add_model_arguments(parser):
     parser.add_argument("--prompt", help="Override the fixed scene caption")
     parser.add_argument("--prompt-interval-chunks", type=int, default=1)
     parser.add_argument("--t5-runtime", choices=("native", "graph"), default="graph")
+    parser.add_argument("--device", default="cuda",
+                        help="Inference device: cuda, cuda:0 or cpu (ROCm builds also report cuda)")
+    parser.add_argument("--dtype", choices=tuple(DTYPES), default="bf16",
+                        help="Model dtype; the optimized NVIDIA runtimes require bf16")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--sink-image", type=Path)
     group.add_argument("--no-sink-image", action="store_true")
@@ -77,6 +85,13 @@ def resolve_model_arguments(args, require_model=True):
         args.vae_graph = realtime and args.vae_backend == "taehv"
     if args.vae_graph and args.vae_backend != "taehv":
         raise ValueError("VAE graph requires TAEHV")
+    if args.dtype != "bf16" and (args.dit_runtime in BF16_ONLY_RUNTIMES
+                                 or args.dit_runtime.startswith("rtx")):
+        raise ValueError(f"The {args.dit_runtime} runtime requires --dtype bf16; "
+                         "use --dit-runtime native for fp16 or fp32")
+    if args.device != "cuda" and args.dit_runtime in BF16_ONLY_RUNTIMES + OPTIMIZED_RUNTIMES:
+        raise ValueError(f"The {args.dit_runtime} runtime requires --device cuda; "
+                         "use --dit-runtime native on other devices")
     if require_model:
         files = [args.checkpoint, args.model_dir / "models_t5_umt5-xxl-enc-bf16.pth"]
         files.append(args.taehv_path if args.vae_backend == "taehv" else args.model_dir / "Wan2.2_VAE.pth")
