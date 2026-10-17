@@ -494,6 +494,19 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,LPWSTR,int) {
                         }
                         if(opt.combatTest&&simulated>=opt.duration)state.running=false;
                     }else accumulator=0;
+                    // MATRIX_GAME_DEBUG=1 writes the input gates once a second; used to
+                    // tell "the loop is parked" apart from "input is being zeroed".
+                    static const bool debugInput=[](){const wchar_t* v=_wgetenv(L"MATRIX_GAME_DEBUG");return v&&*v==L'1';}();
+                    static double debugNext=0;
+                    if(debugInput&&current>=debugNext){
+                        debugNext=current+1;
+                        const auto eye=state.gameplay&&encounter?encounter->camera(state.player).eye:V3{};
+                        std::ofstream dbg(root/L"input-debug.log",std::ios::app);
+                        dbg<<"t="<<encounter->seconds()<<" active="<<state.active<<" manual="<<state.manual
+                           <<" paused="<<state.paused<<" gameplay="<<state.gameplay<<" player="<<state.player
+                           <<" W="<<(state.keys['W']?1:0)<<" space="<<(state.keys[' ']?1:0)
+                           <<" eye=("<<eye.x<<","<<eye.y<<","<<eye.z<<")"<<'\n';
+                    }
                     if(!state.gameplay)state.view.move(float(elapsed),state.keys);
                     // --no-hud keeps the capture free of UI, which the model must never see.
                     if(!opt.noHud){
