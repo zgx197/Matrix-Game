@@ -138,7 +138,7 @@
 | C2 | 必须 | `inference/loader.py` | prompt 编码提前到 DiT 构建之前 | ✅ `ed47573` |
 | C3 | 必须 | `inference/loader.py`、`scenes.py` | 设备/精度可配置（默认仍 cuda/bf16） | ✅ `9f76a2f` |
 | C4 | 建议 | `inference/text.py` | CUDA Graph 能力探测 + 自动回退 | ⬜ |
-| C5 | 建议 | `scenes.py` / CLI | 增加 `--preset rocm` | ⬜ |
+| C5 | 建议 | `scenes.py` / CLI | 增加 `--preset rocm` 与 `--size` | ✅ `a2c4a2a` |
 | C6 | 可选 | `docs/installation.md` | 补 Windows + ROCm 安装说明 | ⬜ |
 | C7 | 可选 | `scripts/check_rocm.py` | 环境自检脚本（P0 验收固化） | 草稿已存在（`D:\work\matrix-game-artifacts\check_rocm.py`） |
 
@@ -432,6 +432,43 @@ TAEHV 的 latent 向上取整，360×640 会得到 23×40 而非 22×40）。
 
 **推荐配置**：`--dit-runtime kernels` + 352×640（15.7 FPS，画质接近 480p）
 或 288×512（20.2 FPS，画质偏软）。相对最初的 6.6 FPS 提升 **2.4–3.1 倍**。
+
+### 阶段 8 · C5 预设与成片验收（已完成）
+
+**新增**
+
+- `--preset rocm`：把验证过的最佳组合固化为一个开关 —— TAEHV + 单步 + `kernels` 运行时 +
+  无 VAE 图 + T5 native（T5 的 graph 在 ROCm 上未验证）。
+- `--size HxW`：输出分辨率（两轴须为 16 的倍数），贯通 sink 编码、latent 网格、
+  离线预处理与视频写出；默认仍为 480×864。
+
+**成片验收**（真实 CLI 路径，不是 harness）
+
+```
+matrix-game render --scene ancient-egypt --input <48 帧低模> \
+  --resources resources --preset rocm --size 352x640 --output outputs/egypt-rocm-352
+```
+
+| 指标 | 结果 |
+| --- | --- |
+| 输出 | 48 帧 / 352×640 / 24fps，`status: complete` |
+| 模型渲染耗时 | **3.75 秒** |
+| 端到端耗时 | 144 秒（其中约 130 秒为模型加载） |
+| 记录到的配置 | `dit_runtime=kernels`、`vae=taehv`、`steps=[1000]`、`vae_graph=false`、`t5=native` |
+| 画质 | 与 480×864 成片同高度对比，结构一致、细节略柔，肉眼差异小 |
+
+**过程中又修掉两个 bug**
+
+1. 离线路径是直接构造 `CastleStream` 的，没有传 `size`，导致 sink（22×40）与流的默认
+   网格（30×54）不匹配而报错；已补 `size=args.size`。
+2. 同一问题的另一半：`ModelComponents.stream()` 之前也未把 `size` 透传，已一并修正。
+
+**当前可用的一行命令**
+
+```powershell
+.\.venv-rocm\Scripts\matrix-game.exe render --scene ancient-egypt `
+  --input <低模视频> --resources resources --preset rocm --size 352x640 --output <目录>
+```
 
 ---
 
