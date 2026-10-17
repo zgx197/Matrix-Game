@@ -55,7 +55,7 @@ struct Options {
     bool validate=false,visualTest=false,vsync=false,fullscreen=false;
     std::wstring view=L"all";std::string scene="castle";
     std::filesystem::path capture,benchmark;
-    bool mapOnly=false,combatTest=false,poseTest=false,uePoseTest=false,coverTest=false,trailTest=false,firingTest=false,enemyFiringTest=false,eventTest=false,record=false;
+    bool mapOnly=false,combatTest=false,poseTest=false,uePoseTest=false,coverTest=false,trailTest=false,firingTest=false,enemyFiringTest=false,eventTest=false,record=false,noHud=false;
     float coverProbability=.5f;
     uint32_t seed=1729;
     float duration=10;
@@ -243,6 +243,7 @@ Options readOptions() {
             else if(arg==L"--event-test") o.eventTest=true;
             else if(arg==L"--cover-probability") o.coverProbability=std::stof(next());
             else if(arg==L"--record") o.record=true;
+        else if(arg==L"--no-hud") o.noHud=true;
             else if(arg==L"--recording-dir") o.recordingDirectory=next();
             else if(arg==L"--duration") o.duration=std::stof(next());
             else if(arg==L"--seed") o.seed=uint32_t(std::stoul(next()));
@@ -436,7 +437,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,LPWSTR,int) {
                 double previousFrameEnd=previous;
                 PerformanceSamples timings;
                 uint32_t fpsFrames=0;
-                HudState hud; hud.showFps=true;
+                HudState hud; hud.showFps=!opt.noHud;
                 double accumulator=0,simulated=0,nextRecoveryAttempt=0;int recordedFrames=0,recordTicks=0,completedClips=0;bool resumeRecording=false;
                 while(state.running) {
                     MSG message;
@@ -489,9 +490,12 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,LPWSTR,int) {
                         if(opt.combatTest&&simulated>=opt.duration)state.running=false;
                     }else accumulator=0;
                     if(!state.gameplay)state.view.move(float(elapsed),state.keys);
-                    hud.combat=state.gameplay;hud.paused=state.paused&&state.gameplay;hud.pauseSelection=state.menuSelection;if(state.gameplay&&encounter)encounter->hud(hud,state.player);
-                    if(state.paused)hud.combatAction="PAUSED";
-                    hud.recording=bool(recording);hud.recordFrames=recording?recording->frames():0;
+                    // --no-hud keeps the capture free of UI, which the model must never see.
+                    if(!opt.noHud){
+                        hud.combat=state.gameplay;hud.paused=state.paused&&state.gameplay;hud.pauseSelection=state.menuSelection;if(state.gameplay&&encounter)encounter->hud(hud,state.player);
+                        if(state.paused)hud.combatAction="PAUSED";
+                        hud.recording=bool(recording);hud.recordFrames=recording?recording->frames():0;
+                    }
                     renderer.render(state.gameplay&&encounter?encounter->draws(state.paused?1.f:float(accumulator*120)):draws,state.gameplay&&encounter?encounter->camera(state.player):state.view.camera(),hud);
                     if(state.capture) {
                         SYSTEMTIME t; GetLocalTime(&t);
