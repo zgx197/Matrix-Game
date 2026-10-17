@@ -5,17 +5,18 @@ import torch
 
 
 @torch.no_grad()
-def encode_sink_image(vae, path, vae_backend, *, first_frame=False):
+def encode_sink_image(vae, path, vae_backend, *, first_frame=False, size=(480, 864)):
     """Encode an independent image, without seeding either streaming VAE cache."""
     from PIL import Image, ImageOps
     from matrix_game.inference.preprocessing import crop_and_resize, frames_to_tensor
 
     if vae_backend not in ("wan", "taehv"):
         raise ValueError("Expected wan or taehv VAE backend")
+    height, width = size
     with Image.open(path) as image:
         image = ImageOps.exif_transpose(image).convert("RGB")
-        image = (ImageOps.fit(image, (864, 480), method=Image.Resampling.LANCZOS) if first_frame
-                 else crop_and_resize(image, 480, 864))
+        image = (ImageOps.fit(image, (width, height), method=Image.Resampling.LANCZOS) if first_frame
+                 else crop_and_resize(image, height, width))
         pixels = frames_to_tensor([image])
     param = next(vae.parameters())
     pixels = pixels.unsqueeze(0).to(param.device, param.dtype)
@@ -27,8 +28,9 @@ def encode_sink_image(vae, path, vae_backend, *, first_frame=False):
             latent = vae.encode(pixels.permute(0, 2, 1, 3, 4)).latent_dist.mode().permute(0, 2, 1, 3, 4)
         finally:
             vae.clear_cache()
-    if tuple(latent.shape) != (1, 1, 48, 30, 54) or not torch.isfinite(latent).all():
-        raise ValueError("Sink image must encode to one finite 48-channel latent")
+    if tuple(latent.shape) != (1, 1, 48, height // 16, width // 16) or not torch.isfinite(latent).all():
+        raise ValueError(f"Sink image must encode to one finite 48-channel latent for {width}x{height}; "
+                         f"got {tuple(latent.shape)} finite={bool(torch.isfinite(latent).all())}")
     return latent.detach()
 
 
@@ -55,7 +57,7 @@ class CastleStream:
 
     def __init__(self, generator, vae, prompt_embeds, *, seed=0, max_latents=8192,
                  vae_backend="wan", steps=(1000, 500), first_steps=(1000, 750, 500, 250), profile=False,
-                 sink_latent=None, sink_mode="kv_only", sink_rope_mode="fixed"):
+                 sink_latent=None, sink_mode="kv_only", sink_rope_mode="fixed", size=(480, 864)):
         from matrix_game.inference.rollout import CausalV2VRollout, set_attention_window, warp_steps
         from matrix_game.inference.wrappers import frame_seq_length_of
 
@@ -72,7 +74,13 @@ class CastleStream:
         self.vae_backend, self.profile = vae_backend, profile
         param = next(generator.parameters())
         self.device, self.dtype = param.device, param.dtype
-        self.shape = (1, 1, 48, 30, 54)
+        # The Wan2.2 latent is 16x downsampled; 480x864 gives the released 30x54 grid.
+        height, width = size
+        if height % 16 or width % 16 or height < 64 or width < 64:
+            raise ValueError("Output size must be a positive multiple of 16 in both axes")
+        self.size = (height, width)
+        self.latent_size = (height // 16, width // 16)
+        self.shape = (1, 1, 48, *self.latent_size)
         if sink_latent is not None and (tuple(sink_latent.shape) != self.shape
                                        or not sink_latent.is_floating_point() or not torch.isfinite(sink_latent).all()):
             raise ValueError("Sink must be one finite floating-point latent frame")
@@ -138,7 +146,7 @@ class CastleStream:
         if self.closed or self.failed:
             raise RuntimeError("Session is closed or failed; create a fresh session")
         count = 1 if self.index == 0 else 4
-        if frame_start != self.frame or tuple(pixels.shape) != (count, 3, 480, 864):
+        if frame_start != self.frame or tuple(pixels.shape) != (count, 3, *self.size):
             raise ValueError("Expected consecutive RGB frames: 1 initially, then 4 per chunk")
         if self.index >= self.max_latents:
             raise ValueError("Session reached its configured RoPE/frame budget")
@@ -209,7 +217,7 @@ class CastleStream:
             else:
                 decoded = self.vae.decode_stream(pred.permute(0, 2, 1, 3, 4)).sample[0].permute(1, 0, 2, 3)
             mark()
-            if tuple(decoded.shape) != (count, 3, 480, 864):
+            if tuple(decoded.shape) != (count, 3, *self.size):
                 raise RuntimeError("VAE decoder output cadence changed")
             rgb = None
             if on_rgb is not None:
