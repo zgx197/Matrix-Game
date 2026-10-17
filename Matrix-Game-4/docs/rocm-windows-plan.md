@@ -13,13 +13,13 @@
 | 阶段 0 | Windows 引擎（游戏）构建与录制 | ✅ 完成，已提交并推送 |
 | P0 | ROCm + PyTorch 环境、数值与算力验证 | ✅ 完成，门 G0 通过 |
 | P1 | 其余依赖安装、绕开 torch 版本锁 | ✅ 完成，门 G1 通过 |
-| P2 | 单场景权重下载与校验（22.5 GB） | ⬜ 未开始 |
-| P3 | 首次离线渲染 | ⬜ 未开始 |
+| P2 | 单场景权重下载与校验（22.5 GB） | ✅ 完成，门 G2 通过 |
+| P3 | 首次离线渲染 | ✅ 完成（lean 配置 48 帧），门 G3 通过 |
 | P4 | 性能基线与优化 | ⬜ 未开始 |
 | P5 | 交互可行性（需 ≥15 FPS） | ⬜ 未开始 |
 
-系统级准备：页面文件已由 2.9 GB 改为 `E:` 上 32–64 GB（注册表已写入，**重启后生效**，见 §3 S1）。
-其余待办为电源计划与 Defender 排除，均不阻塞 P2。
+系统级准备：页面文件已由 2.9 GB 改为 `E:` 上 32–64 GB，重启后实测生效（见 §3 S1）。
+其余待办为电源计划与 Defender 排除，均不阻塞。
 
 ---
 
@@ -115,8 +115,8 @@
 | --- | --- | --- |
 | G0 | 设备可见 + BF16 可用 | ✅ 通过 |
 | G1 | 依赖导入无冲突 | ✅ 通过 |
-| G2 | 权重 SHA256 全通过 | ⬜ |
-| G3 | 48 帧渲染成功 | ⬜ |
+| G2 | 权重 SHA256 全通过 | ✅ 通过（官方 verify，16/16） |
+| G3 | 48 帧渲染成功 | ✅ 通过（lean 配置，48 帧完整输出） |
 | G4 | 形成性能基线 | ⬜ |
 | G5 | ≥15 FPS 且稳定 60 秒 | ⬜ |
 
@@ -319,6 +319,50 @@ venv 体积从 10.82 GB 增至 **11.1 GB**。
 下载脚本 `fetch_assets.py` 本次增强：支持 `Range` 断点续传、每个文件最多 6 次重试、
 每 256 MiB 打印进度、按条目解析 `repo_id`/`repo_type`/`revision`。
 
+### 阶段 6 · P3 首次离线渲染（已完成）
+
+**第一次尝试：`quality` 预设（Wan VAE + 2 步 + native DiT）—— 不可用**
+
+48 帧输入，跑 15 分钟只出了 **1 帧**，随后被判为异常终止。实测：
+
+| 指标 | 数值 |
+| --- | --- |
+| 处理速度 | **0.01 FPS**（约 100 秒/帧） |
+| 提交内存 | **73.4 GB / 83.1 GB**（物理 32 GB + 页文件 32 GB） |
+| 页面文件占用 | 12.5 GB（持续换页） |
+| GPU 常驻显存 | 20–21 GB |
+| CPU | 单核占用 95% |
+
+结论：不是算力问题，而是 **Wan2.2 VAE 的增量解码器把内存推到换页**，整机进入抖动状态。
+该配置在本机（32 GB 内存）不可用。
+
+**第二次尝试：`realtime` 预设的等价参数（TAEHV + 单步 + native DiT）—— 可用**
+
+命令：
+
+```powershell
+matrix-game render --scene ancient-egypt --input <48 帧低模视频> `
+  --resources resources --preset realtime --dit-runtime native --no-vae-graph `
+  --t5-runtime native --output outputs\egypt-full
+```
+
+| 指标 | 数值 |
+| --- | --- |
+| 输出 | 48 帧 / 864×480 / 24fps，`status: complete`，`padded_frames: 1` |
+| 纯渲染耗时 | **7.23 秒**（约 6.6 FPS） |
+| 端到端耗时 | 137 秒（其中约 130 秒是模型加载） |
+| GPU 显存 | **3.0 GB**（对比 quality 的 20+ GB） |
+| 提交内存 | 14.5 GB（无换页） |
+| 注意力后端 | `sdpa`（无 flash-attn） |
+
+视觉结果：低模骨架被转成写实风格的古埃及场景，布局、视角、角色位置完全对齐；
+单步 + TAEHV 下细节偏软，符合该配置的预期。
+
+**门 G3 通过**：48 帧完整输出，帧数一致，无 NaN/黑帧。
+
+**关键结论**：本机的瓶颈是**内存**而不是算力。同一份权重、同一张卡，
+仅仅把编解码器从 Wan VAE 换成 TAEHV，显存从 20+ GB 降到 3 GB，速度从 0.01 FPS 升到 6.6 FPS。
+
 ---
 
 ## 9. 问题与解决记录
@@ -339,6 +383,8 @@ venv 体积从 10.82 GB 增至 **11.1 GB**。
 | 12 | 下载基础模型文件报 `HTTP 404` | `models.json` 里 T5/VAE/tokenizer 有**条目级** `repo_id`/`revision` 覆盖（来自 `alibaba-pai/Wan2.2-Fun-5B-Control`），脚本只用了命令行给的仓库 | 改为逐条目解析 `repo_id` + `repo_type` + `revision` + `repo_path` 生成 URL |
 | 13 | 测试套件 3 个用例报 `ModuleNotFoundError: aiohttp` | `rocm` extra 不含 `server` extra，而 `test_chunk_profile` / `test_display` / `test_cli` 会导入 `matrix_game.server.app` | 在 venv 内补装 `aiohttp>=3.10,<4`；测试 77 项中 75 项通过 |
 | 14 | 2 个测试报 `WinError 1314`（客户端没有所需的特权） | `test_reject_link` / `test_path_boundary` 会创建符号链接，Windows 需要管理员或开发者模式 | 属环境限制而非代码缺陷；以管理员运行或开启开发者模式即可通过，本次记为已知偏差 |
+| 15 | 渲染在建 DiT 时崩：`AttributeError: module 'torch.distributed' has no attribute 'is_initialized'` | ROCm Windows 版 torch 的 `torch.distributed` 是空壳（`is_available()` 为 False，无 `is_initialized`），而 `_rank0()` 无条件调用它 | `loading.py` 与 `wrappers.py` 的 `_rank0()` 改为先 `hasattr` 探测；无分布式即为单进程、恒为 rank 0（提交 `2664a5e`） |
+| 16 | `quality` 预设 15 分钟只出 1 帧，整机换页 | Wan2.2 VAE 增量解码器 + 2 步去噪把提交内存推到 73.4 GB（共 83.1 GB 可用），触发持续换页；GPU 常驻 20+ GB | 改用 `realtime` 等价参数（TAEHV + 单步 + native）：显存 3 GB、渲染 6.6 FPS、无换页。Wan VAE 路径留待 P4 评估是否需要降低分辨率或分块解码 |
 
 **页面文件变更记录（S1）**
 
@@ -359,8 +405,8 @@ venv 体积从 10.82 GB 增至 **11.1 GB**。
 | R1 | BF16 不支持或极慢 | 中 | 高 | ✅ 已排除（3.7e-3，82.9 TFLOPS） |
 | R2 | MIOpen conv3d 回退/报错 | 中 | 高 | ✅ 已排除（bf16/fp16 均正常） |
 | R3 | hipGraph 不完整 | 中 | 中 | ✅ 已排除（capture+replay 成功） |
-| R4 | 32 GB 内存 + 22 GB 权重换页 | 中 | 高 | 待 S1 页面文件；C2 调序 |
-| R5 | `diffusers 0.39` / `transformers 5.17` 与 torch 2.9 不兼容 | 中 | 中 | 先按仓库版本装，失败逐个降级 |
+| R4 | 32 GB 内存 + 22 GB 权重换页 | 中 | 高 | ⚠️ **已实测命中**：Wan VAE 路径提交 73.4 GB、整机换页；TAEHV 路径 14.5 GB、无换页。S1 与 C2 已缓解加载期，解码器仍需 P4 处理 |
+| R5 | `diffusers 0.39` / `transformers 5.17` 与 torch 2.9 不兼容 | 中 | 中 | ✅ 未见问题：导入正常，权重建库与渲染均通过 |
 | R6 | ROCm 轮子下载慢/损坏 | 低 | 中 | 已成功安装；保留命令记录便于重装 |
 | R7 | 驱动过新导致兼容问题 | 低 | 中 | 实测正常；必要时回退 26.1.1 |
 | R8 | 性能低于预期（<3 FPS） | 低 | 中 | 算力实测乐观；仍可用于离线渲染 |
@@ -409,11 +455,12 @@ pip 临时目录不设全局，按命令临时指定到 `D:\work\Matrix-Game\.tm
 
 ## 13. 待办
 
-1. **[人工]** 重启，使页面文件扩容（`E:` 32–64 GB）生效；重启后用 `Win32_PageFileUsage` 复核。
-2. S2 电源计划、S3 Defender 排除。
-3. P2：下载单场景权重（22.5 GB）并校验，验收 G2。
+1. S2 电源计划、S3 Defender 排除。
+2. **P4 性能基线**：固定输入下对比 `TAEHV+1步` / `TAEHV+2步` / `Wan VAE+1步`，记录显存、每块耗时与 FPS；
+   重点评估 Wan VAE 是否能在降低分辨率或分块解码后回到可用区间。
+3. 实施 C5（`--preset rocm`，把已验证的参数组合固化成预设）。
 4. 把 `check_rocm.py` 收敛为仓库内 `scripts/check_rocm.py`（C7）。
-5. P3 时按需实施 C2（T5/DiT 加载顺序）与 C5（`--preset rocm`）。
+5. C4（T5/VAE 的 graph 能力探测）：本机 hipGraph 可用，但当前走 native，暂不实施。
 
 ---
 
