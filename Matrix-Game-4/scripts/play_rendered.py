@@ -53,6 +53,22 @@ user32.IsWindowVisible.argtypes = [wintypes.HWND]
 user32.GetWindowTextLengthW.argtypes = [wintypes.HWND]
 user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
 user32.EnumWindows.argtypes = [WNDENUMPROC, wintypes.LPARAM]
+user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+user32.SetFocus.argtypes = [wintypes.HWND]
+user32.SetFocus.restype = wintypes.HWND
+user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.c_void_p]
+user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+user32.AttachThreadInput.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.BOOL]
+user32.GetAncestor.argtypes = [wintypes.HWND, ctypes.c_uint]
+user32.GetAncestor.restype = wintypes.HWND
+user32.GetWindowLongPtrW.argtypes = [wintypes.HWND, ctypes.c_int]
+user32.GetWindowLongPtrW.restype = ctypes.c_longlong
+user32.SetWindowLongPtrW.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_longlong]
+user32.SetWindowLongPtrW.restype = ctypes.c_longlong
+kernel32 = ctypes.windll.kernel32
+kernel32.GetCurrentThreadId.restype = wintypes.DWORD
+# A preview window that can be activated would silently eat the player's keys.
+WS_EX_NOACTIVATE = 0x08000000
 
 # Screen coordinates must be physical pixels; otherwise a scaled desktop makes
 # placement and GetClientRect disagree by the scale factor.
@@ -95,6 +111,23 @@ def find_window(title_part):
 
     user32.EnumWindows(proc(callback), 0)
     return found[0] if found else (None, None)
+
+
+def activate(hwnd):
+    """Give the game keyboard focus from another process.
+
+    SetForegroundWindow alone only raises the window; the engine also needs to
+    own the keyboard focus, which cross-process SetFocus can only borrow through
+    a temporary thread-input attachment.
+    """
+    target = user32.GetWindowThreadProcessId(hwnd, None)
+    mine = kernel32.GetCurrentThreadId()
+    if target and target != mine:
+        user32.AttachThreadInput(mine, target, True)
+    user32.SetForegroundWindow(hwnd)
+    user32.SetFocus(hwnd)
+    if target and target != mine:
+        user32.AttachThreadInput(mine, target, False)
 
 
 def place_topmost(hwnd, x, y, width, height):
@@ -266,6 +299,15 @@ def main():
     import tkinter as tk
     root = tk.Tk()
     root.title("Matrix-Game 4.0 - rendered preview")
+    # The preview must never take keyboard focus: the engine ignores the keyboard
+    # while its app is inactive, and a cross-process SetFocus cannot give it back.
+    # WS_EX_NOACTIVATE has to be set before the window is first mapped.
+    root.withdraw()
+    root.update_idletasks()
+    preview_hwnd = user32.GetAncestor(root.winfo_id(), 2)
+    if preview_hwnd:
+        style = user32.GetWindowLongPtrW(preview_hwnd, -20)
+        user32.SetWindowLongPtrW(preview_hwnd, -20, style | WS_EX_NOACTIVATE)
     label = tk.Label(root, text="waiting for frames...", width=out_width, height=out_height,
                      bg="black", fg="white")
     label.pack()
@@ -274,6 +316,9 @@ def main():
     # Sit to the right of the game window so neither occludes the other.
     root.geometry(f"{out_width}x{out_height + 28}+{client_w + 24}+{max(0, y)}")
     root.attributes("-topmost", True)
+    root.deiconify()
+    root.update_idletasks()
+    activate(hwnd)
 
     display = Queue(maxsize=2)
     photos = []
