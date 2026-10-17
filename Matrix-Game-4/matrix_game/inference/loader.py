@@ -45,6 +45,13 @@ class ModelComponents:
         torch.backends.cudnn.allow_tf32 = False
         self.attention_backend = "fa3" if FLASH_ATTN_3_AVAILABLE else ("fa2" if FLASH_ATTN_2_AVAILABLE else "sdpa")
         device, dtype, dtype_name = resolve_device_dtype(torch, self.args)
+        # Encode a fixed prompt before the DiT is materialised. A 5B DiT (~10 GB)
+        # and the umT5 encoder (~11 GB) do not fit in one 24 GB card, and the
+        # generic path used to build the DiT first. The optimized runtimes below
+        # already encode and release T5; this brings the same order to the rest.
+        optimized = self.args.dit_runtime.startswith(("rtx5090", "rtx5080", "rtx5070ti"))
+        if self.prompt is None and not optimized and self.args.prompt_mode != "dynamic":
+            self.prompt = self._encode_fixed_prompt(device, dtype)
         if self.args.dit_runtime.startswith("rtx5080"):
             # encode the fixed prompt and free T5.
             self.prompt = self._encode_fixed_prompt(device, dtype)
