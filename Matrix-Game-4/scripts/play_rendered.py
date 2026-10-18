@@ -264,7 +264,9 @@ def main():
                           seed=0, vae_backend=args.vae_backend, steps=args.steps,
                           first_steps=args.first_steps, sink_latent=components.sink_latent,
                           sink_mode=args.sink_mode, sink_rope_mode=args.sink_rope_mode,
-                          size=args.size)
+                          size=args.size, window=args.window, clean_every=args.clean_every,
+                          clean_adaptive=args.clean_adaptive, clean_threshold=args.clean_threshold,
+                          clean_max_gap=args.clean_max_gap)
     print(f"model ready ({torch.cuda.get_device_name(0)}), launching game", flush=True)
 
     game = None
@@ -332,6 +334,8 @@ def main():
     bridge = Bridge(stream, bbox, args.capture_fps, on_frames)
     bridge.start()
 
+    seen = {"chunks": 0, "at": time.perf_counter()}
+
     def tick():
         try:
             rgb = display.get_nowait()
@@ -350,6 +354,12 @@ def main():
                 text=f"capture {bridge.capture_fps:4.1f} fps | render {bridge.render_fps:4.1f} fps | "
                      f"lag {bridge.latency_ms:4.0f} ms | chunks {bridge.chunks} | "
                      f"WASD move, Space jump, Shift dash, mouse look")
+            # Mirror the status into the log so a session can be read without OCR.
+            now = time.perf_counter()
+            if now - seen["at"] >= 5.0:
+                print(f"[status] capture={bridge.capture_fps:.1f} render={bridge.render_fps:.1f} "
+                      f"lag={bridge.latency_ms:.0f} chunks={bridge.chunks}", flush=True)
+                seen["at"] = now
         if not bridge.stop.is_set():
             root.after(20, tick)
         else:
