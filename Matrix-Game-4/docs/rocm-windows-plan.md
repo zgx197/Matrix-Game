@@ -1000,6 +1000,7 @@ NNNNNN.semantic_id.png  336×192，8-bit 灰度，取值 0–11：
 | [inference-optimization-survey.md](inference-optimization-survey.md) | 推理侧优化候选清单（不动基模）：原理、代码落点、预期收益、风险与验收口径 |
 | [inference-optimization-matrix.md](inference-optimization-matrix.md) | 上述候选的实验数据登记表，逐项填写 |
 | [style-control-experiment.md](style-control-experiment.md) | 风格可控性实验：prompt 与代理配色**都无法改变画风**，风格锁死在 checkpoint 里 |
+| [session-archive-2026-10-18.md](session-archive-2026-10-18.md) | **本段工作的完整归档**：时间线、决策、数据、事故、产出物、遗留问题、下次接手入口 |
 
 **本仓库的边界（2026-10-18）**：推理侧优化与风格可控性实验已全部结案。
 后续的**风格探索**（试画风、出概念图/预告片）不在本仓库进行——它依赖外部图像/视频模型 API，
