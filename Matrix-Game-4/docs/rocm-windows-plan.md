@@ -999,3 +999,4 @@ NNNNNN.semantic_id.png  336×192，8-bit 灰度，取值 0–11：
 | --- | --- |
 | [inference-optimization-survey.md](inference-optimization-survey.md) | 推理侧优化候选清单（不动基模）：原理、代码落点、预期收益、风险与验收口径 |
 | [inference-optimization-matrix.md](inference-optimization-matrix.md) | 上述候选的实验数据登记表，逐项填写 |
+| [style-control-experiment.md](style-control-experiment.md) | 风格可控性实验：prompt 与代理配色**都无法改变画风**，风格锁死在 checkpoint 里 |
