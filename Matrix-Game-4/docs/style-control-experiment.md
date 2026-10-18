@@ -98,3 +98,44 @@ matrix-game render --scene ancient-egypt --input proxy-hue.mp4 --resources resou
 
 对比图：`captures/style-compare.png`（prompt 组）、`captures/style-extreme.png`（极端 prompt）、
 `captures/style-hue.png`（配色组）。
+
+## 6. Godot 工程接入尝试（2026-10-18，已结案）
+
+为了准备"用真实场景试画风"的素材，尝试直接驱动本机的 Godot 工程 `D:\work\wuxia` 截图。
+**结论：该工程不适合做风格实验，后续实验不在本仓库进行。**
+
+### 6.1 做的事与踩的坑
+
+| 步骤 | 结果 |
+| --- | --- |
+| 工程定位 | `godot/`，Godot **4.7.1 .NET (C#)**，主场景 `main.tscn`，ECS 逻辑帧 30 Hz |
+| 本机 Godot 版本 | 只有 4.6.1 → C# 程序集按 4.7.1 编译，运行时报 `MissingMethodException: Animation.get_Length()`，**角色卡在 T-pose** |
+| 修复 | 下载并安装 **Godot 4.7.1 stable mono**（`D:\GodotCSharp\Godot_v4.7.1-stable_mono_win64`） |
+| 资产导入 | `.godot/` 只有 `mono`，无导入缓存 → 必须先跑 `--headless --editor --quit` 完成导入（130 步，129 个 Mixamo 动作） |
+| 运行 | `[WHITEBOX] Ready: 100 x 100 m, 129 animations, 65 bones`，`Playing ... idle`，无报错 |
+| 截图 | 三个视角已保存：`captures/wuxia-view-{default,game,close}.png` |
+
+**两个环境坑（可复用）**
+
+1. **代理变量大小写重复**（`http_proxy` 与 `HTTP_PROXY` 同时存在）会让 `Start-Process`
+   直接抛 `ArgumentException`；启动任何 Windows 程序前先清掉小写版本。
+2. **Godot 工程的 `.godot/` 缺少导入缓存时，直接跑游戏只会显示空地面**，
+   不是场景坏了——先跑一次无头编辑器导入即可。
+
+### 6.2 为什么不适合做风格实验
+
+这个工程是**动作测试场**，不是关卡：
+
+- 场景内容只有 **100×100 m 网格地面 + 一个 Y Bot**，没有建筑、道具、植被、遮挡关系
+- 白盒是程序生成的，没有材质分区与光照层次
+- 风格探索需要"纵深 + 材质差异 + 遮挡"，这些素材都不具备
+
+因此风格实验改在**仓库外**进行（外部图像/视频模型 API），本仓库不再承载该方向的实验。
+已有的三张截图可作为"角色在动态中"的检验素材，但不作为风格决策依据。
+
+### 6.3 对 `D:\work\wuxia` 的副作用（已还原）
+
+用 4.6.1 跑导入时，Godot 重写了 130 个 `.fbx.import`，删掉了两个 4.7 专属选项
+（`mesh_library/use_node_names_as_mesh_names`、`array_mesh/deduplicate_surfaces`）。
+已用 `git checkout -- .` 全部还原，并删除构建产生的 `Wuxia.csproj.old*` 备份，仓库回到干净状态。
+
